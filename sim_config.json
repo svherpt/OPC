@@ -1,0 +1,17 @@
+{
+    "mask_grid_size": 256,
+    "mask_width_nm": 2000,
+    "mask_num_layers": 5,
+    "mask_num_blocks": 5,
+    "mask_border_size": 20,
+    "layer_growth_factor": 1.5,
+    "wavelength_nm": 193,
+    "numerical_aperture": 1.35,
+    "resist_threshold": 0.5,
+    "resist_blur_sigma": 1.0,
+    "flare_fraction": 0.3,
+    "illumination_type": "annular",
+    "defocus_nm": 60.0,
+    "pupil_eps": 1e-3,
+    "resist_eps": 1e-3
+}
