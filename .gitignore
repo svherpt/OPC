@@ -14,6 +14,3 @@ venv/
 
 # Data (adjust if needed)
 data/
-augmented_massive/
-augmented_medium/
-augmented_small/

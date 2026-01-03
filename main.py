@@ -3,7 +3,6 @@ import src.core.simulator.lithography_simulator as simulator
 import src.visualisers.simulator.simulation_visualiser as simulation_visualiser
 import src.core.simulator.masks as masks
 import json
-import src.core.ml.data_augmenter as data_augmenter
 from src.core.ml.trainer import LithoSurrogateNet, LithoSurrogateTrainer
 from src.core.ml.litho_nn_multi_head import LithoSurrogateTrainerMulti
 from src.core.ml.litho_mask_optimizer import LithoMaskOptimizer
@@ -18,18 +17,12 @@ def main():
 
     
     #show_n_masks('./augmented_medium/train/inputs', 10)
-    #generate_n_augmentations(num_masks=1000, n_augmentations=10)
     
     #test_defocus_results(sim_config, initial_mask)
-    dir_path = './augmented_small'
-    dir_path = './augmented_medium'
-    dir_path = './augmented_massive'
-    #generate_n_augmentations(1000, 10, output_dir=dir_path)
-
-    # sim_config["mask_grid_size"] = 512
-    #generate_n_augmentations(1000, 10, output_dir='./augmented_medium')
-    # for i in range(5):
-    #     generate_n_augmentations(1000, 10, output_dir='./augmented_massive')
+    dir_path = 'augmented_small'
+    dir_path = 'augmented_medium'
+    dir_path = 'augmented_massive'
+    
 
     # random_masks = masks.get_dataset_masks('./data/ganopc-data/artitgt', 1, **sim_config)
     # test_ML_model(sim_config, random_masks)
@@ -37,7 +30,7 @@ def main():
     # show_augmentation()
 
     #train_model('./augmented_massive', target_type='resists')
-    optimize_model_multihead('./data/ganopc-data/artitgt')
+    #optimize_model_multihead('./data/ganopc-data/artitgt')
 
 
 def show_augmentation():
@@ -88,20 +81,7 @@ def optimize_model_multihead(data_dir, model_path='litho_surrogate_multi.pth', n
     print("Optimization finished and mask saved.")
 
 
-def generate_n_augmentations(num_masks, n_augmentations=5, output_dir='./augmented_medium'):
-    augmenter = data_augmenter.MaskAugmenter()
 
-    random_masks = masks.get_dataset_masks('./data/ganopc-data/artitgt', num_masks, **sim_config)
-    augmenter.save_dataset(random_masks, output_dir=output_dir, sim_config=sim_config, augmentations_per_mask=n_augmentations, train_split=0.8)
-
-
-def show_n_masks(dir_path, num_masks=5):
-    random_masks = masks.get_dataset_masks(dir_path, num_masks, **sim_config)
-
-    for i, mask in enumerate(random_masks):
-        litho_sim = simulator.LithographySimulator(sim_config)
-        sim_results = litho_sim.simulate(mask)
-        simulation_visualiser.visualize_simulation_results(sim_results, mask=mask, config=sim_config)
 
 
 def train_model(input_dir, target_type='resists'):
