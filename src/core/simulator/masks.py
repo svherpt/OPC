@@ -4,7 +4,7 @@ from scipy.ndimage import zoom
 import os
 
 
-def get_random_dataset_mask(dir_path="./data/ganopc-data/artitgt", **kwargs):
+def get_random_dataset_mask(dir_path = "./data/ganopc-data/artitgt", **kwargs):
     all_files = [f for f in os.listdir(dir_path) if f.endswith('.png')]
     random_file = np.random.choice(all_files)
 
@@ -22,12 +22,7 @@ def get_dataset_masks(dir_path="./data/ganopc-data/artitgt", num_masks=5, **kwar
 
 def read_mask_from_img(file_path, **kwargs):
     mask_size = kwargs.get("mask_grid_size", 512)
-    mask_img = plt.imread(file_path)
-    
-    if mask_img.ndim == 3:
-        mask = mask_img[:,:,0]
-    else:
-        mask = mask_img
+    mask = plt.imread(file_path)
 
     mask = (mask > 0.5).astype(np.float64)
 
@@ -43,3 +38,9 @@ def visualise_mask(mask):
     plt.imshow(mask)
     plt.title("Generated Mask")
     plt.show()
+
+if __name__ == "__main__":
+    test_mask = read_mask_from_img("./data/ganopc-data/artitgt/1.glp.png", mask_grid_size=256)
+    visualise_mask(test_mask)
+    test_mask = read_mask_from_img("./augmented_small/train/inputs/000000.png", mask_grid_size=256)
+    visualise_mask(test_mask)
