@@ -14,8 +14,6 @@ with open("sim_config.json", "r") as f:
 
 
 def main():
-
-    
     #show_n_masks('./augmented_medium/train/inputs', 10)
     
     #test_defocus_results(sim_config, initial_mask)
@@ -31,14 +29,6 @@ def main():
 
     #train_model('./augmented_massive', target_type='resists')
     #optimize_model_multihead('./data/ganopc-data/artitgt')
-
-
-def show_augmentation():
-    test_mask =  masks.read_mask_from_img('./data/ganopc-data/artitgt/1.glp.png', **sim_config)
-    augmenter = data_augmenter.MaskAugmenter(seed=42)
-    
-    # Visualize new augmentations
-    augmenter.visualize_augmentations(test_mask)
 
 
 def optimize_model_multihead(data_dir, model_path='litho_surrogate_multi.pth', num_iterations=1000, learning_rate=0.1):
@@ -81,11 +71,7 @@ def optimize_model_multihead(data_dir, model_path='litho_surrogate_multi.pth', n
     print("Optimization finished and mask saved.")
 
 
-
-
-
 def train_model(input_dir, target_type='resists'):
-
     trainer = LithoSurrogateTrainerMulti(
     data_dir=input_dir,
     batch_size=16,
@@ -95,8 +81,6 @@ def train_model(input_dir, target_type='resists'):
 
     trainer.train(num_epochs=20, save_path='litho_surrogate_multi.pth')
     trainer.visualize_predictions(num_samples=10)
-
-
 
 
     # trainer = LithoSurrogateTrainer(
@@ -111,23 +95,6 @@ def train_model(input_dir, target_type='resists'):
     # trainer.train(num_epochs=20, save_path='litho_surrogate.pth')
     
     # trainer.visualize_predictions(num_samples=10)
-
-
-def test_ML_model(sim_config, mask_list):
-    optimizer = MaskOptimizer(sim_config)
-
-    for mask in mask_list:
-        mask *= 255
-        masks.visualise_mask(mask)
-
-        print(np.max(mask))
-
-        optimized_mask, history = optimizer.optimize_mask(
-        target_resist=mask,
-        num_iterations=1000,
-        )
-
-        optimizer.visualize_optimization(mask, optimized_mask, history)
 
 
 if __name__ == "__main__":

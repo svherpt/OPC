@@ -24,7 +24,7 @@ def visualize_specific_augmentation(augmenter, mask, augmentation_name, **kwargs
 
     
     plt.tight_layout(rect=[0, 0, 1, 0.95])
-    plt.savefig(f'{augmentation_name}_example.png', dpi=150)
+    plt.savefig(f'./figures/{augmentation_name}_example.png', dpi=150)
     plt.show()
     
     return augmented
@@ -62,7 +62,7 @@ def visualize_augmentations(augmenter, mask, n_augmentations=5):
         axes[7 + i].axis('off')
     
     plt.tight_layout()
-    plt.savefig('augmentation_examples.png', dpi=150, bbox_inches='tight')
+    plt.savefig('./figures/augmentation_examples.png', dpi=150, bbox_inches='tight')
     plt.show()
 
 
