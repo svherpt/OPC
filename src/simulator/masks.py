@@ -4,15 +4,6 @@ from scipy.ndimage import zoom
 import os
 
 def get_layered_lines_mask(mask_grid_size, mask_num_layers, mask_num_blocks, mask_border_size, **kwargs):
-    """
-    Docstring for get_layered_lines_mask
-
-    :param mask_grid_size: int, size of the square mask
-    :param mask_num_layers: int, number of rows in the mask
-    :param mask_num_blocks: int, number of blocks in the first layer
-    :param mask_border_size: int, size of the border around the mask, also used as spacing between blocks
-    :return: np.ndarray, generated mask
-    """
     layer_growth_factor = 1.5
 
     mask = np.zeros((mask_grid_size, mask_grid_size))
@@ -36,29 +27,22 @@ def get_layered_lines_mask(mask_grid_size, mask_num_layers, mask_num_blocks, mas
 
     return mask
 
-def get_random_dataset_mask(**kwargs):
-    file_path = "./data/ganopc-data/artitgt/"
-    all_files = [f for f in os.listdir(file_path) if f.endswith('.glp.png')]
+def get_random_dataset_mask(dir_path="./data/ganopc-data/artitgt", **kwargs):
+    all_files = [f for f in os.listdir(dir_path) if f.endswith('.png')]
     random_file = np.random.choice(all_files)
 
-    mask_id = random_file.split('.')[0]
+    return read_mask_from_img(dir_path + "/" + random_file, **kwargs)
 
-    return read_mask_from_img(mask_id, **kwargs)
-
-def get_dataset_masks(num_masks, **kwargs):
-    file_path = "./data/ganopc-data/artitgt/"
-    all_files = [f for f in os.listdir(file_path) if f.endswith('.glp.png')]
+def get_dataset_masks(dir_path="./data/ganopc-data/artitgt", num_masks=5, **kwargs):
+    all_files = [f for f in os.listdir(dir_path) if f.endswith('.png')]
 
     #Sample without replacement
     selected_files = np.random.choice(all_files, size=num_masks, replace=False)
-    selected_ids = [f.split('.')[0] for f in selected_files]
 
-    return [read_mask_from_img(mask_id, **kwargs) for mask_id in selected_ids]
+    return [read_mask_from_img(dir_path + "/" + file_path, **kwargs) for file_path in selected_files]
 
-def read_mask_from_img(mask_id, **kwargs):
+def read_mask_from_img(file_path, **kwargs):
     mask_size = kwargs.get("mask_grid_size", 512)
-    
-    file_path = f"./data/ganopc-data/artitgt/{mask_id}.glp.png"
     mask_img = plt.imread(file_path)
     
     if mask_img.ndim == 3:

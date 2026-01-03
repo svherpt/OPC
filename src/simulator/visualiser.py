@@ -49,7 +49,12 @@ def visualize_simulation_results(return_obj, mask=None, config=None, cmap_config
     if "mask_ft" in return_obj:
         ax = plt.subplot(2, 3, plot_idx)
         mask_ft_mag = np.abs(return_obj["mask_ft"])
-        norm = LogNorm(vmin=mask_ft_mag[mask_ft_mag>0].min(), vmax=mask_ft_mag.max())
+
+        norm = LogNorm(vmin=1, vmax= 1)
+        if mask_ft_mag[mask_ft_mag>0].shape[0] > 0:
+            print(mask_ft_mag[mask_ft_mag>0].shape, mask_ft_mag.shape)
+            norm = LogNorm(vmin=mask_ft_mag[mask_ft_mag>0].min(), vmax=mask_ft_mag.max())
+
         _plot_image(ax, mask_ft_mag, cmaps.get("mask_ft", "viridis"),
                    'Mask Fourier Transform (Magnitude)', 'Frequency X (1/nm)', 
                    'Frequency Y (1/nm)', 'Magnitude (log)', 
@@ -62,7 +67,11 @@ def visualize_simulation_results(return_obj, mask=None, config=None, cmap_config
         filtered_ft_mag = np.abs(return_obj["filtered_ft"])
         filtered_ft_mag_masked = np.copy(filtered_ft_mag)
         filtered_ft_mag_masked[filtered_ft_mag_masked == 0] = np.nan
-        norm = LogNorm(vmin=filtered_ft_mag[filtered_ft_mag>0].min(), vmax=filtered_ft_mag.max())
+        
+        norm = LogNorm(vmin=1, vmax= 1)
+        if mask_ft_mag[mask_ft_mag>0].shape[0] > 0:
+            print(mask_ft_mag[mask_ft_mag>0].shape, mask_ft_mag.shape)
+            norm = LogNorm(vmin=filtered_ft_mag[filtered_ft_mag>0].min(), vmax=filtered_ft_mag.max())
         _plot_image(ax, filtered_ft_mag_masked, cmaps.get("filtered_ft", "viridis"),
                    'Total Filtered FT (After Pupil)', 'Frequency X (1/nm)', 
                    'Frequency Y (1/nm)', 'Magnitude (log)', 

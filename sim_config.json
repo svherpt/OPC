@@ -13,5 +13,6 @@
     "illumination_type": "annular",
     "defocus_nm": 60.0,
     "pupil_eps": 1e-3,
-    "resist_eps": 1e-3
+    "resist_eps": 1e-3,
+    "max_intensity": 2.5
 }

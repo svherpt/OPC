@@ -1,9 +1,4 @@
 def get_source_points(config):
-    """
-    Returns a list of (fx, fy, weight) source points in frequency space.
-    fx, fy are spatial frequency offsets [1/nm].
-    """
-
     illumination_type = config.get("illumination_type", "conventional")
 
     wavelength_nm = config.get("wavelength_nm", 193.0)

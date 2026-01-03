@@ -1,0 +1,19 @@
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+venv/
+.env/
+.venv/
+
+# IDEs
+.vscode/
+
+
+
+# Data (adjust if needed)
+data/
+augmented_massive/
+augmented_medium/
+augmented_small/

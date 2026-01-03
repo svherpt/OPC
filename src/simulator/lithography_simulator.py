@@ -8,6 +8,7 @@ class LithographySimulator:
 
     def simulate(self, mask):
         flare_fraction = self.config.get("flare_fraction", 0.0)
+        max_intensity = self.config.get("max_intensity", 4.0)
 
         return_obj = {}
 
@@ -46,6 +47,8 @@ class LithographySimulator:
         mean_intensity = np.mean(total_intensity)
         wafer_intensity = (1.0 - flare_fraction) * total_intensity + flare_fraction * mean_intensity
         resist_profile = self.get_resist_profile(wafer_intensity)
+
+        wafer_intensity = np.clip(wafer_intensity / max_intensity, 0, 1)
 
         #Return all relevant data so it can be visualised later
         return_obj["mask_ft"] = mask_ft
