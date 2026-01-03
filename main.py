@@ -1,17 +1,18 @@
 import numpy as np
-import src.simulator.lithography_simulator as simulator
-import src.simulator.visualiser as visualiser
-import src.simulator.masks as masks
+import src.core.simulator.lithography_simulator as simulator
+import src.visualisers.simulator.simulation_visualiser as simulation_visualiser
+import src.core.simulator.masks as masks
 import json
-import src.ml.data_augmenter as data_augmenter
-from src.ml.trainer import LithoSurrogateNet, LithoSurrogateTrainer
-from src.ml.litho_nn_multi_head import LithoSurrogateTrainerMulti
-from src.ml.litho_mask_optimizer import LithoMaskOptimizer
+import src.core.ml.data_augmenter as data_augmenter
+from src.core.ml.trainer import LithoSurrogateNet, LithoSurrogateTrainer
+from src.core.ml.litho_nn_multi_head import LithoSurrogateTrainerMulti
+from src.core.ml.litho_mask_optimizer import LithoMaskOptimizer
 import torch
 from PIL import Image
 
 with open("sim_config.json", "r") as f:
     sim_config = json.load(f)
+
 
 def main():
 
@@ -38,18 +39,16 @@ def main():
     #train_model('./augmented_massive', target_type='resists')
     optimize_model_multihead('./data/ganopc-data/artitgt')
 
-def show_augmentation():
 
+def show_augmentation():
     test_mask =  masks.read_mask_from_img('./data/ganopc-data/artitgt/1.glp.png', **sim_config)
     augmenter = data_augmenter.MaskAugmenter(seed=42)
     
     # Visualize new augmentations
     augmenter.visualize_augmentations(test_mask)
 
-def optimize_model_multihead(data_dir, model_path='litho_surrogate_multi.pth',
-                             num_iterations=1000, learning_rate=0.1):
-    
 
+def optimize_model_multihead(data_dir, model_path='litho_surrogate_multi.pth', num_iterations=1000, learning_rate=0.1):
     litho_sim = simulator.LithographySimulator(sim_config)
 
     # Load target resist profile
@@ -58,7 +57,7 @@ def optimize_model_multihead(data_dir, model_path='litho_surrogate_multi.pth',
 
     # Load the trained multi-head model
     model = LithoSurrogateTrainerMulti('augmented_small').model.to('cuda')
-    model.load_state_dict(torch.load(model_path))
+    model.load_state_dict(torch.load('models/' + model_path))
     model.eval()  # freeze model
 
     # Initialize the mask optimizer
@@ -102,7 +101,8 @@ def show_n_masks(dir_path, num_masks=5):
     for i, mask in enumerate(random_masks):
         litho_sim = simulator.LithographySimulator(sim_config)
         sim_results = litho_sim.simulate(mask)
-        visualiser.visualize_simulation_results(sim_results, mask=mask, config=sim_config)
+        simulation_visualiser.visualize_simulation_results(sim_results, mask=mask, config=sim_config)
+
 
 def train_model(input_dir, target_type='resists'):
 
@@ -132,13 +132,8 @@ def train_model(input_dir, target_type='resists'):
     
     # trainer.visualize_predictions(num_samples=10)
 
-def test_sigma_results(sim_config, initial_mask):
-    sigma_values = np.linspace(0.5, 3.0, 6)
-    param_name = "resist_blur_sigma"
-    compare_results(sim_config, initial_mask, param_name, sigma_values, 'resist_profile')
 
 def test_ML_model(sim_config, mask_list):
-
     optimizer = MaskOptimizer(sim_config)
 
     for mask in mask_list:
@@ -154,18 +149,6 @@ def test_ML_model(sim_config, mask_list):
 
         optimizer.visualize_optimization(mask, optimized_mask, history)
 
-
-def compare_results(initial_config, initial_mask, param_name, param_values, visualise_parameter):
-    return_objs = []
-    for i in range(6):
-        sim_config_copy = initial_config.copy()
-        sim_config_copy[param_name] = param_values[i]
-
-        litho_sim = simulator.LithographySimulator(sim_config_copy)
-        sim_results = litho_sim.simulate(initial_mask)
-        return_objs.append(sim_results)
-
-    visualiser.visualize_comparison_multi(return_objs, masks=[initial_mask]*6, config=initial_config, parameter=visualise_parameter)
 
 if __name__ == "__main__":
     main()
