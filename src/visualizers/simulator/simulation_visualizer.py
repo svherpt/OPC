@@ -192,11 +192,6 @@ def compare_results(initial_config, initial_mask, param_name, param_values, visu
     visualize_comparison_multi(return_objs, param_values, parameter=param_name, visualise_parameter=visualise_parameter, config=initial_config)
 
 
-
-
-def show_n_masks(dir_path, num_masks=5):
-    
-
 if __name__ == "__main__":
     with open("sim_config.json", "r") as f:
         sim_config = json.load(f)
@@ -214,4 +209,4 @@ if __name__ == "__main__":
     for i, mask in enumerate(random_masks):
         litho_sim = simulator.LithographySimulator(sim_config)
         sim_results = litho_sim.simulate(mask)
-        simulation_visualiser.visualize_simulation_results(sim_results, mask=mask, config=sim_config)
+        simulation_visualizer.visualize_simulation_results(sim_results, mask=mask, config=sim_config)
