@@ -51,13 +51,7 @@ def plot_optimization_result(target_resist, optimized_mask, history, model, devi
     ax5.set_title('MSE Loss')
     ax5.grid(alpha=0.3)
     
-    ax6 = fig.add_subplot(gs[1, 2])
-    ax6.plot(iterations, history['binary_score'], 'g-', linewidth=2)
-    ax6.set_xlabel('Iteration')
-    ax6.set_ylabel('Binary Score')
-    ax6.set_title('Binary Score (lower = more binary)')
-    ax6.grid(alpha=0.3)
-    
+ 
     # Row 3: Error map and additional metrics
     error = np.abs(target_resist - pred_resist_np)
     

@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-
+import numpy as np
 
 class ConvBlock(nn.Module):
     def __init__(self, in_ch, out_ch):
@@ -104,5 +104,20 @@ class MultiTargetUNet(nn.Module):
 
         intensity = torch.clamp(self.head_intensity(d1), 0, 1)
         resist = torch.clamp(self.head_resist(d1), 0, 1)
+        
+        return intensity, resist
+    
+    def predict(self, mask_np):
+        self.eval()
+        device = next(self.parameters()).device
+        
+        mask = np.array(mask_np, dtype=np.float32)
+        mask = torch.from_numpy(mask).unsqueeze(0).unsqueeze(0).to(device)
+        
+        with torch.no_grad():
+            intensity, resist = self(mask)
+        
+        intensity = intensity.cpu().squeeze().numpy()
+        resist = resist.cpu().squeeze().numpy()
         
         return intensity, resist
