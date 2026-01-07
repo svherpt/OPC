@@ -8,6 +8,7 @@ class LithographySimulator:
 
 
     def simulate(self, mask):
+
         flare_fraction = self.config.get("flare_fraction", 0.0)
         max_intensity = self.config.get("max_intensity", 4.0)
 

@@ -61,41 +61,27 @@ def test_ML_model():
 
 
 def optimize_model_multihead():
-    opt = MaskOptimizer(modelClass=MultiTargetUNet, modelPath='litho_surrogate_multi_good.pth', device='cuda')
-    
-    target_resist = masks.read_mask_from_img('ganopc-data/artitgt/10605.glp.png')
-    mask = torch.rand_like(torch.tensor(target_resist)).numpy()
+    opt = MaskOptimizer(modelClass=MultiTargetUNet, 
+                   modelPath='./models/litho_surrogate_multi_good.pth', 
+                   device='cuda')
 
-    target_zeros = np.zeros_like(target_resist)
-    random_mask = np.random.randint(0, 2, size=target_resist.shape).astype(np.float32)
+    target_resist = masks.read_mask_from_img('ganopc-data/artitgt/10605.glp.png', mask_grid_size=256)
+    target_resist = masks.read_mask_from_img('ganopc-data/artitgt/572.glp.png', mask_grid_size=256)
 
-    #Print the min and max of both target and initial mask
-    print(f"Target resist min: {target_resist.min()}, max: {target_resist.max()}")
-    print(f"Initial mask min: {mask.min()}, max: {mask.max()}")
-
-
+    # This now works from zeros!
     optimized_mask, history = opt.optimize(
-        target_resist=target_resist,
-        initial_mask=target_resist,
-        num_iterations=10000,
-        lr=0.1,
-        binarization_weight=0,
-        tv_weight=0,
-        binarize_final=True
-    )
-
-
-    optimization_visualizer.plot_optimization_result(
-        target_resist=target_resist,
-        optimized_mask=optimized_mask,
-        history=history,
-        model=opt.model,
-        device=opt.device,
-        save_dir='./visualizations',
-        show=True
-    )
+    target_resist=target_resist,
+    num_iterations=4500,
+    lr=0.2,               # Learning rate
+    initial_blur=10.0,     # Start with heavy blur (coarse)
+    final_blur=0.5,       # End with light blur (fine details)
+    binarize_final=True,
+    binary_iterations=500
+)
     
-    opt.save_mask(optimized_mask, './results/optimized_mask.png')
+    litho_sim = simulator.LithographySimulator(sim_config)
+
+    optimization_visualizer.show_optimization_results(target_resist, optimized_mask, opt.model, litho_sim, history)
 
 
 def train_model(input_dir, target_type='resists'):
