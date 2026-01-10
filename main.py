@@ -65,8 +65,9 @@ def optimize_model_multihead():
                    modelPath='./models/litho_surrogate_multi_good.pth', 
                    device='cuda')
 
-    target_resist = masks.read_mask_from_img('ganopc-data/artitgt/10605.glp.png', mask_grid_size=256)
-    target_resist = masks.read_mask_from_img('ganopc-data/artitgt/572.glp.png', mask_grid_size=256)
+    # target_resist = masks.read_mask_from_img('ganopc-data/artitgt/10605.glp.png', mask_grid_size=256)
+    # target_resist = masks.read_mask_from_img('ganopc-data/artitgt/572.glp.png', mask_grid_size=256)
+    target_resist = masks.read_mask_from_img('ganopc-data/artitgt/71.glp.png', mask_grid_size=256)
 
     # This now works from zeros!
     optimized_mask, history = opt.optimize(

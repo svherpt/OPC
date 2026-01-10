@@ -26,10 +26,19 @@ def read_mask_from_img(file_path, **kwargs):
 
     mask = (mask > 0.5).astype(np.float64)
 
+    #Since we only have grayscale masks, take only one channel if needed
+    if len(mask.shape) == 3:
+        mask = mask[:, :, 0]
+
+
     #Resize to desired size
     if mask.shape[0] != mask_size or mask.shape[1] != mask_size:
         zoom_factors = (mask_size / mask.shape[0], mask_size / mask.shape[1])
         mask = zoom(mask, zoom_factors, order=0)
+
+    
+
+
 
     return mask
 

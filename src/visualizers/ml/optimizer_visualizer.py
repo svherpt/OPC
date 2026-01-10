@@ -69,7 +69,7 @@ def show_optimization_results(target_resist, optimized_mask, model, litho_sim, h
     
     # Create animation if requested and history is provided
     if create_animation and history is not None:
-        create_optimization_animation(target_resist, history, model, litho_sim, gif_path, fps, figsize, device)
+        create_optimization_animation(target_resist, history, model, litho_sim, 'results/' + gif_path, fps, figsize, device)
 
 
 def create_optimization_animation(target_resist, history, model, litho_sim, output_path='optimization.gif', 

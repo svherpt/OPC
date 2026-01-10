@@ -20,14 +20,10 @@ class Inferer:
         
         with torch.no_grad():
             output = self.model(mask)
-        
-        #TODO: check if this can be made more generic
-        if isinstance(output, tuple):
-            intensity = output[0].cpu().squeeze().numpy()
-            resist = output[1].cpu().squeeze().numpy()
-            return intensity, resist
-        else:
-            return output.cpu().squeeze().numpy()
+    
+        intensity = output[0].cpu().squeeze().numpy()
+        resist = output[1].cpu().squeeze().numpy()
+        return intensity, resist
 
     def predict_batch(self, masks_np):
         if isinstance(masks_np, list):
