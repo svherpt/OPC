@@ -10,6 +10,7 @@ from src.core.ml.litho_mask_optimizer import MaskOptimizer
 from src.core.ml.inferer import Inferer
 import src.visualizers.ml.optimizer_visualizer as optimization_visualizer
 import src.core.simulator.light_sources as light_sources
+import time
 
 with open("sim_config.json", "r") as f:
     sim_config = json.load(f)
@@ -27,11 +28,13 @@ def main():
     source_illumination = light_sources.get_source_grid(sim_config)  # shape: (Npupil, Npupil)
 
     random_mask = masks.read_mask_from_img('ganopc-data/artitgt/1.glp.png', **sim_config)
-    masks.visualise_mask(random_mask)
+
+    t0 = time.time()
     simResults = litho_sim.simulate(random_mask, source_illumination)
-    light_sources.visualize_pupil(source_illumination)
-    
-    simulation_visualizer.visualize_simulation_results(simResults, mask=random_mask, config=sim_config)  
+    t1 = time.time()
+
+    print(f"Simulation time: {t1 - t0:.2f} seconds")
+    simulation_visualizer.visualize_simulation_results(simResults, mask=random_mask, illumination=source_illumination, config=sim_config)  
 
     # random_masks = masks.get_dataset_masks('./data/ganopc-data/artitgt', 1, **sim_config)
     # test_ML_model(sim_config, random_masks)

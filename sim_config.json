@@ -1,5 +1,6 @@
 {
     "mask_grid_size": 256,
+    "illumination_grid_size": 256,
     "mask_width_nm": 2000,
     "mask_num_layers": 5,
     "mask_num_blocks": 5,
