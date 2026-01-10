@@ -10,9 +10,9 @@ from scipy.ndimage import gaussian_filter
 
 
 class LithographySimulator:
-    def __init__(self, config, device='cuda', chunk_size=1024):
+    def __init__(self, config, chunk_size=128):
         self.config = config
-        self.device = torch.device(device if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.chunk_size = chunk_size
 
         print(f"LithographySimulatorGPU initialized on device: {self.device}")

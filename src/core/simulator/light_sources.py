@@ -1,53 +1,81 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.ndimage import zoom
+import json
 
 def create_quadrant_source(quadrant_grid_size, numerical_aperture, wavelength_nm, illumination_type):
     max_spatial_frequency = numerical_aperture / wavelength_nm
-    k_values = np.linspace(0, max_spatial_frequency, quadrant_grid_size)
-    kx_grid, ky_grid = np.meshgrid(k_values, k_values)
-    source_illumination = np.zeros_like(kx_grid)
+    spatial_frequency_x, spatial_frequency_y = np.meshgrid(
+        np.linspace(0, max_spatial_frequency, quadrant_grid_size),
+        np.linspace(0, max_spatial_frequency, quadrant_grid_size)
+    )
+    source_illumination = np.zeros_like(spatial_frequency_x)
 
     if illumination_type == "conventional":
-        # small spot near origin
-        spot_mask = (kx_grid**2 + ky_grid**2) < (0.05 * max_spatial_frequency)**2
+        spot_mask = (spatial_frequency_x**2 + spatial_frequency_y**2) < (0.05 * max_spatial_frequency)**2
         source_illumination[spot_mask] = 1.0
 
     elif illumination_type == "dipole_x":
-        # two spots along kx axis
         spot_distance = 0.6 * max_spatial_frequency
         spot_sigma = 0.05 * max_spatial_frequency
         source_illumination += np.exp(
-            -((kx_grid - spot_distance)**2 + ky_grid**2) / (2 * spot_sigma**2)
+            -((spatial_frequency_x - spot_distance)**2 + spatial_frequency_y**2) / (2 * spot_sigma**2)
         )
 
     else:
         raise ValueError(f"Unknown illumination_type: {illumination_type}")
 
-    return source_illumination, kx_grid, ky_grid
+    return source_illumination, spatial_frequency_x, spatial_frequency_y
 
 
 def quadrant_to_full(quadrant_illumination):
-    # Mirror quadrant to full 4-fold symmetric pupil
     top_half = np.concatenate([quadrant_illumination[:, ::-1], quadrant_illumination], axis=1)
     full_pupil = np.concatenate([top_half[::-1, :], top_half], axis=0)
     return full_pupil
 
 
-def visualize_pupil(full_illumination):
-    plt.imshow(full_illumination, extent=(-1, 1, -1, 1), origin='lower')
-    plt.title("Pupil intensity")
-    plt.colorbar(label="Relative intensity")
+def visualize_pupil(lowres_illumination, target_size=256, highres_illumination=None):
+    """
+    Show low-res, upsampled, and optionally true high-res illumination side by side.
+    """
+    # Upsample low-res to target size
+    zoom_factor = target_size / lowres_illumination.shape[0]
+    upsampled_illumination = zoom(lowres_illumination, zoom=zoom_factor, order=3)
+
+    # If no true high-res provided, just use upsampled as placeholder
+    if highres_illumination is None:
+        highres_illumination = upsampled_illumination
+
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+
+    # Low-res
+    im0 = axes[0].imshow(lowres_illumination, extent=(-1, 1, -1, 1), origin='lower', cmap='viridis')
+    axes[0].set_title(f"Low-res ({lowres_illumination.shape[0]}x{lowres_illumination.shape[1]})")
+    plt.colorbar(im0, ax=axes[0], fraction=0.046, pad=0.04, label="Relative intensity")
+
+    # Upsampled
+    im1 = axes[1].imshow(upsampled_illumination, extent=(-1, 1, -1, 1), origin='lower', cmap='viridis')
+    axes[1].set_title(f"Upsampled ({target_size}x{target_size})")
+    plt.colorbar(im1, ax=axes[1], fraction=0.046, pad=0.04, label="Relative intensity")
+
+    # True high-res
+    im2 = axes[2].imshow(highres_illumination, extent=(-1, 1, -1, 1), origin='lower', cmap='viridis')
+    axes[2].set_title(f"High-res ({highres_illumination.shape[0]}x{highres_illumination.shape[1]})")
+    plt.colorbar(im2, ax=axes[2], fraction=0.046, pad=0.04, label="Relative intensity")
+
+    plt.tight_layout()
     plt.show()
 
 
+
 def get_source_grid(config):
-    illumination_grid_size = config.get("illumination_grid_size", 33)
+    illumination_grid_size = config.get("illumination_grid_size", 64)
     numerical_aperture = config.get("numerical_aperture", 1.35)
     wavelength_nm = config.get("wavelength_nm", 193)
     illumination_type = config.get("illumination_type", "conventional")
 
     quadrant_grid_size = illumination_grid_size // 2
-    quadrant_source, kx_quadrant, ky_quadrant = create_quadrant_source(
+    quadrant_source, freq_x, freq_y = create_quadrant_source(
         quadrant_grid_size, numerical_aperture, wavelength_nm, illumination_type
     )
 
@@ -55,13 +83,17 @@ def get_source_grid(config):
     return full_illumination
 
 
-if __name__ == "__main__":
-    config = {
-        "illumination_grid_size": 65,
-        "numerical_aperture": 1.35,
-        "wavelength_nm": 193,
-        "illumination_type": "dipole_x"
-    }
+def upsample_illumination(lowres_illumination, target_size):
+    current_size = lowres_illumination.shape[0]
+    zoom_factor = target_size / current_size
+    upsampled = zoom(lowres_illumination, zoom=zoom_factor, order=3)
+    return upsampled
 
-    full_source_illumination = get_source_grid(config)
-    visualize_pupil(full_source_illumination)
+
+if __name__ == "__main__":
+    with open("sim_config.json", "r") as f:
+        sim_config = json.load(f)
+
+    lowres_source_illumination = get_source_grid(sim_config)
+    true_highres_source = get_source_grid({**sim_config, "illumination_grid_size": 256})  # or already generated
+    visualize_pupil(lowres_source_illumination, highres_illumination=true_highres_source)
