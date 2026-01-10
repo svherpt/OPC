@@ -9,6 +9,8 @@ from PIL import Image
 from src.core.ml.litho_mask_optimizer import MaskOptimizer
 from src.core.ml.inferer import Inferer
 import src.visualizers.ml.optimizer_visualizer as optimization_visualizer
+import src.core.simulator.light_sources as light_sources
+
 with open("sim_config.json", "r") as f:
     sim_config = json.load(f)
 
@@ -21,6 +23,15 @@ def main():
     dir_path = 'augmented_medium'
     dir_path = 'augmented_massive'
     
+    litho_sim = simulator.LithographySimulator(sim_config)
+    source_illumination = light_sources.get_source_grid(sim_config)  # shape: (Npupil, Npupil)
+
+    random_mask = masks.read_mask_from_img('ganopc-data/artitgt/1.glp.png', **sim_config)
+    masks.visualise_mask(random_mask)
+    simResults = litho_sim.simulate(random_mask, source_illumination)
+    light_sources.visualize_pupil(source_illumination)
+    
+    simulation_visualizer.visualize_simulation_results(simResults, mask=random_mask, config=sim_config)  
 
     # random_masks = masks.get_dataset_masks('./data/ganopc-data/artitgt', 1, **sim_config)
     # test_ML_model(sim_config, random_masks)
@@ -31,7 +42,7 @@ def main():
     #optimize_model_multihead('ganopc-data/artitgt')
 
     # test_ML_model()
-    optimize_model_multihead()
+    # optimize_model_multihead()
 
 
 

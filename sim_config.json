@@ -10,7 +10,7 @@
     "resist_threshold": 0.5,
     "resist_blur_sigma": 1.0,
     "flare_fraction": 0.3,
-    "illumination_type": "annular",
+    "illumination_type": "dipole_x",
     "defocus_nm": 60.0,
     "pupil_eps": 1e-3,
     "resist_eps": 1e-3,
