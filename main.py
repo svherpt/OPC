@@ -1,52 +1,115 @@
 import numpy as np
-import src.simulator.lithography_simulator as simulator
-import src.simulator.visualiser as visualiser
-import src.simulator.masks as masks
+import src.core.simulator.lithography_simulator as simulator
+import src.visualizers.simulator.simulation_visualizer as simulation_visualizer
+import src.core.simulator.masks as masks
 import json
-import src.ml.data_augmenter as data_augmenter
-
+from src.core.ml.models import MultiTargetUNet
+import torch
+from PIL import Image
+from src.core.ml.litho_mask_optimizer import MaskOptimizer
+from src.core.ml.inferer import Inferer
+import src.visualizers.ml.optimizer_visualizer as optimization_visualizer
 with open("sim_config.json", "r") as f:
     sim_config = json.load(f)
 
+
 def main():
-
-    
-    show_n_masks(num_masks=10)
-
+    #show_n_masks('./augmented_medium/train/inputs', 10)
     
     #test_defocus_results(sim_config, initial_mask)
+    dir_path = 'augmented_small'
+    dir_path = 'augmented_medium'
+    dir_path = 'augmented_massive'
+    
 
-def generate_n_augmentations(num_masks, n_augmentations=5):
-    augmenter = data_augmenter.MaskAugmenter()
+    # random_masks = masks.get_dataset_masks('./data/ganopc-data/artitgt', 1, **sim_config)
+    # test_ML_model(sim_config, random_masks)
+    
+    # show_augmentation()
 
-    random_masks = masks.get_dataset_masks(num_masks, **sim_config)
-    augmenter.save_dataset(random_masks, output_dir='./augmented_dataset', sim_config=sim_config, augmentations_per_mask=n_augmentations, train_split=0.8)
+    #train_model('./augmented_massive', target_type='resists')
+    #optimize_model_multihead('ganopc-data/artitgt')
+
+    # test_ML_model()
+    optimize_model_multihead()
 
 
-def show_n_masks(num_masks=5):
-    random_masks = masks.get_dataset_masks(num_masks, **sim_config)
 
-    for i, mask in enumerate(random_masks):
-        litho_sim = simulator.LithographySimulator(sim_config)
-        sim_results = litho_sim.simulate(mask)
-        visualiser.visualize_simulation_results(sim_results, mask=mask, config=sim_config)
+def test_ML_model():
+    inferer = Inferer(modelClass=MultiTargetUNet, model_name='litho_surrogate_multi_good.pth', device='cuda', base_ch=64)
+    
+    img = masks.read_mask_from_img('ganopc-data/artitgt/10605.glp.png')
+    intensity, resist = inferer.predict(img)
 
-def test_sigma_results(sim_config, initial_mask):
-    sigma_values = np.linspace(0.5, 3.0, 6)
-    param_name = "resist_blur_sigma"
-    compare_results(sim_config, initial_mask, param_name, sigma_values, 'resist_profile')
 
-def compare_results(initial_config, initial_mask, param_name, param_values, visualise_parameter):
-    return_objs = []
-    for i in range(6):
-        sim_config_copy = initial_config.copy()
-        sim_config_copy[param_name] = param_values[i]
+    #Print min and max
+    print(f"Predicted resist min: {resist.min()}, max: {resist.max()}")
 
-        litho_sim = simulator.LithographySimulator(sim_config_copy)
-        sim_results = litho_sim.simulate(initial_mask)
-        return_objs.append(sim_results)
+    #show results
+    import matplotlib.pyplot as plt
+    fig, axs = plt.subplots(1, 3, figsize=(12, 4))
+    axs[0].imshow(img, cmap='gray')
+    axs[0].set_title('Input Mask')
+    axs[1].imshow(intensity, cmap='gray')
+    axs[1].set_title('Predicted Intensity')
+    axs[2].imshow(resist, cmap='gray')
+    axs[2].set_title('Predicted Resist')
+    plt.show()
 
-    visualiser.visualize_comparison_multi(return_objs, masks=[initial_mask]*6, config=initial_config, parameter=visualise_parameter)
+    
+
+
+
+def optimize_model_multihead():
+    opt = MaskOptimizer(modelClass=MultiTargetUNet, 
+                   modelPath='./models/litho_surrogate_multi_good.pth', 
+                   device='cuda')
+
+    # target_resist = masks.read_mask_from_img('ganopc-data/artitgt/10605.glp.png', mask_grid_size=256)
+    # target_resist = masks.read_mask_from_img('ganopc-data/artitgt/572.glp.png', mask_grid_size=256)
+    target_resist = masks.read_mask_from_img('ganopc-data/artitgt/71.glp.png', mask_grid_size=256)
+
+    # This now works from zeros!
+    optimized_mask, history = opt.optimize(
+    target_resist=target_resist,
+    num_iterations=4500,
+    lr=0.2,               # Learning rate
+    initial_blur=10.0,     # Start with heavy blur (coarse)
+    final_blur=0.5,       # End with light blur (fine details)
+    binarize_final=True,
+    binary_iterations=500
+)
+    
+    litho_sim = simulator.LithographySimulator(sim_config)
+
+    optimization_visualizer.show_optimization_results(target_resist, optimized_mask, opt.model, litho_sim, history)
+
+
+def train_model(input_dir, target_type='resists'):
+    trainer = LithoSurrogateTrainerMulti(
+    data_dir=input_dir,
+    batch_size=16,
+    learning_rate=1e-4,
+    device='cuda'
+    )
+
+    trainer.train(num_epochs=20, save_path='litho_surrogate_multi.pth')
+    trainer.visualize_predictions(num_samples=10)
+
+
+    # trainer = LithoSurrogateTrainer(
+    #     data_dir=input_dir,
+    #     target_type=target_type,
+    #     batch_size=16,
+    #     learning_rate=1e-4,
+    #     device='cuda',
+    #     img_size=256
+    # )
+    
+    # trainer.train(num_epochs=20, save_path='litho_surrogate.pth')
+    
+    # trainer.visualize_predictions(num_samples=10)
+
 
 if __name__ == "__main__":
     main()
