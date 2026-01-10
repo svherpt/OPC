@@ -39,19 +39,32 @@ class LithographySimulator:
         total_intensity = np.zeros_like(mask, dtype=np.float64)
 
         # Vectorised loop over all pupil pixels
+        mask = mask.astype(np.float32)
+        source_illumination = source_illumination.astype(np.float32)
+
+        total_filtered_ft = np.zeros_like(mask, dtype=np.complex64)
+        total_intensity = np.zeros_like(mask, dtype=np.float32)
+
         for i in range(pupil_grid_size):
             for j in range(pupil_grid_size):
                 weight = source_illumination[i, j]
                 if weight == 0:
                     continue
 
-                pupil_filter = self.get_pupil_filter(freq_x - kx_grid[i,j], freq_y - ky_grid[i,j])
+                pupil_filter = self.get_pupil_filter(
+                    freq_x - kx_grid[i, j],
+                    freq_y - ky_grid[i, j]
+                ).astype(np.complex64)
+
                 filtered_ft = mask_ft * pupil_filter
                 total_filtered_ft += filtered_ft * weight
 
                 wafer_field = np.fft.ifft2(np.fft.ifftshift(filtered_ft))
-                total_intensity += np.abs(wafer_field)**2
+                total_intensity += weight * np.abs(wafer_field) ** 2
 
+
+
+        
         # Normalise by total source power
         total_weight = np.sum(source_illumination)
         total_filtered_ft /= total_weight
