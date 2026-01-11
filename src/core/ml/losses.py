@@ -37,9 +37,11 @@ class EdgeAwareLoss(nn.Module):
         self.register_buffer('sobel_y', sobel_y)
     
     def get_edges(self, img):
-        edge_x = F.conv2d(img, self.sobel_x, padding=1)
-        edge_y = F.conv2d(img, self.sobel_y, padding=1)
+        device = img.device
+        edge_x = F.conv2d(img, self.sobel_x.to(device), padding=1)
+        edge_y = F.conv2d(img, self.sobel_y.to(device), padding=1)
         return torch.sqrt(edge_x**2 + edge_y**2 + 1e-6)
+
     
     def forward(self, pred, target):
         mse = torch.mean((pred - target) ** 2)

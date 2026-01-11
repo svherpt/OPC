@@ -1,24 +1,53 @@
+from pathlib import Path
+import random
+import numpy as np
 import torch
+import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-import numpy as np
-import random
 from tqdm import tqdm
-from pathlib import Path
+from src.core.ml.models import LithographyDataset, LithographyUNet
+from src.core.ml.losses import MultiHeadLoss
+import src.visualizers.ml.trainer_visualizer as trainer_visualizer
+from torch.utils.data import Subset
+
+
+
+def compute_mae(pred, target):
+    """Mean Absolute Error"""
+    return torch.mean(torch.abs(pred - target)).item()
+
+
+def compute_rmse(pred, target):
+    """Root Mean Squared Error"""
+    return torch.sqrt(torch.mean((pred - target) ** 2)).item()
+
+
+def compute_psnr(pred, target, max_val=1.0):
+    """Peak Signal-to-Noise Ratio"""
+    mse = torch.mean((pred - target) ** 2)
+    if mse == 0:
+        return float('inf')
+    return (20 * torch.log10(max_val / torch.sqrt(mse))).item()
 
 
 class Trainer:
     def __init__(self, model, criterion, train_dataset, test_dataset, 
                  batch_size=16, num_workers=4, device='cuda', lr=1e-4, 
                  save_dir='./checkpoints', seed=42):
-        self._set_seed(seed)
-        
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        np.random.seed(seed)
+        random.seed(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+
         self.model = model
         self.criterion = criterion
         self.device = torch.device(device if torch.cuda.is_available() else 'cpu')
         self.save_dir = Path(save_dir)
         self.save_dir.mkdir(exist_ok=True, parents=True)
-        
+
         self.train_loader = DataLoader(
             train_dataset, batch_size=batch_size, shuffle=True, 
             num_workers=num_workers, pin_memory=True
@@ -27,114 +56,219 @@ class Trainer:
             test_dataset, batch_size=batch_size, shuffle=False, 
             num_workers=num_workers, pin_memory=True
         )
-        
+
         self.model.to(self.device)
         self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
         self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
             self.optimizer, mode='min', factor=0.5, patience=5, min_lr=1e-6
         )
-        
+
         self.max_grad_norm = 1.0
         self.history = {
             'train_loss': [],
             'test_loss': [],
-            'lr': []
+            'lr': [],
+            'intensity_mae': [],
+            'intensity_rmse': [],
+            'intensity_psnr': [],
+            'resist_mae': [],
+            'resist_rmse': [],
+            'resist_psnr': [],
+            'grad_norm': []
         }
-        
+
         print(f"Device: {self.device}")
         print(f"Parameters: {sum(p.numel() for p in model.parameters()):,}")
-    
-    def _set_seed(self, seed):
-        torch.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
-        np.random.seed(seed)
-        random.seed(seed)
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
-    
-    def _move_to_device(self, batch):
+
+    def move_to_device(self, batch):
         if isinstance(batch, (list, tuple)):
             return tuple(x.to(self.device) for x in batch)
         return batch.to(self.device)
-    
+
     def train_epoch(self):
         self.model.train()
         total_loss = 0.0
-        
+        grad_norms = []
+
         for batch in tqdm(self.train_loader, desc='Train'):
-            batch = self._move_to_device(batch)
-            
+            batch = self.move_to_device(batch)
+            mask, illum_q, target_int, target_res = batch
+
             self.optimizer.zero_grad()
-            
-            if len(batch) == 2:
-                inputs, targets = batch
-                outputs = self.model(inputs)
-                loss = self.criterion(outputs, targets)
-            else:
-                inputs, targets_int, targets_res = batch
-                pred_int, pred_res = self.model(inputs)
-                loss = self.criterion(pred_int, pred_res, targets_int, targets_res)
-            
+            pred_int, pred_res = self.model(mask, illum_q)
+            loss = self.criterion(pred_int, pred_res, target_int, target_res)
+
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
-            self.optimizer.step()
             
+            # Compute gradient norm before clipping
+            total_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
+            grad_norms.append(total_norm.item())
+            
+            self.optimizer.step()
+
             total_loss += loss.item()
-        
-        return total_loss / len(self.train_loader)
-    
+
+        avg_grad_norm = np.mean(grad_norms)
+        return total_loss / len(self.train_loader), avg_grad_norm
+
     def evaluate(self):
         self.model.eval()
         total_loss = 0.0
         
+        # Metrics accumulators
+        intensity_mae_sum = 0.0
+        intensity_rmse_sum = 0.0
+        intensity_psnr_sum = 0.0
+        resist_mae_sum = 0.0
+        resist_rmse_sum = 0.0
+        resist_psnr_sum = 0.0
+
         with torch.no_grad():
             for batch in tqdm(self.test_loader, desc='Eval'):
-                batch = self._move_to_device(batch)
-                
-                if len(batch) == 2:
-                    inputs, targets = batch
-                    outputs = self.model(inputs)
-                    loss = self.criterion(outputs, targets)
-                else:
-                    inputs, targets_int, targets_res = batch
-                    pred_int, pred_res = self.model(inputs)
-                    loss = self.criterion(pred_int, pred_res, targets_int, targets_res)
-                
+                batch = self.move_to_device(batch)
+                mask, illum_q, target_int, target_res = batch
+
+                pred_int, pred_res = self.model(mask, illum_q)
+                loss = self.criterion(pred_int, pred_res, target_int, target_res)
                 total_loss += loss.item()
+                
+                # Compute metrics
+                intensity_mae_sum += compute_mae(pred_int, target_int)
+                intensity_rmse_sum += compute_rmse(pred_int, target_int)
+                intensity_psnr_sum += compute_psnr(pred_int, target_int)
+                
+                resist_mae_sum += compute_mae(pred_res, target_res)
+                resist_rmse_sum += compute_rmse(pred_res, target_res)
+                resist_psnr_sum += compute_psnr(pred_res, target_res)
+
+        n_batches = len(self.test_loader)
+        metrics = {
+            'loss': total_loss / n_batches,
+            'intensity_mae': intensity_mae_sum / n_batches,
+            'intensity_rmse': intensity_rmse_sum / n_batches,
+            'intensity_psnr': intensity_psnr_sum / n_batches,
+            'resist_mae': resist_mae_sum / n_batches,
+            'resist_rmse': resist_rmse_sum / n_batches,
+            'resist_psnr': resist_psnr_sum / n_batches
+        }
         
-        return total_loss / len(self.test_loader)
-    
-    def train(self, epochs=50, save_name='best_model.pth', patience=15):
+        return metrics
+
+    def train(self, epochs=50, save_name='best_model.pth', patience=15, 
+              viz_every=1, n_viz_samples=6):
         print(f"\nTraining for {epochs} epochs...")
         best_loss = float('inf')
         patience_counter = 0
         
+        # Create visualization directory
+        viz_dir = self.save_dir / 'visualizations'
+        viz_dir.mkdir(exist_ok=True, parents=True)
+
         for epoch in range(epochs):
-            train_loss = self.train_epoch()
-            test_loss = self.evaluate()
-            
+            train_loss, grad_norm = self.train_epoch()
+            metrics = self.evaluate()
+            test_loss = metrics['loss']
+
             self.history['train_loss'].append(train_loss)
             self.history['test_loss'].append(test_loss)
             lr = self.optimizer.param_groups[0]['lr']
             self.history['lr'].append(lr)
+            self.history['grad_norm'].append(grad_norm)
             
-            print(f"Epoch {epoch+1}/{epochs} | Train: {train_loss:.6f} | Test: {test_loss:.6f} | LR: {lr:.2e}")
-            
+            # Store metrics
+            self.history['intensity_mae'].append(metrics['intensity_mae'])
+            self.history['intensity_rmse'].append(metrics['intensity_rmse'])
+            self.history['intensity_psnr'].append(metrics['intensity_psnr'])
+            self.history['resist_mae'].append(metrics['resist_mae'])
+            self.history['resist_rmse'].append(metrics['resist_rmse'])
+            self.history['resist_psnr'].append(metrics['resist_psnr'])
+
+            print(f"Epoch {epoch+1}/{epochs}")
+            print(f"  Loss - Train: {train_loss:.6f} | Test: {test_loss:.6f}")
+            print(f"  Intensity - MAE: {metrics['intensity_mae']:.4f} | RMSE: {metrics['intensity_rmse']:.4f} | PSNR: {metrics['intensity_psnr']:.2f} dB")
+            print(f"  Resist    - MAE: {metrics['resist_mae']:.4f} | RMSE: {metrics['resist_rmse']:.4f} | PSNR: {metrics['resist_psnr']:.2f} dB")
+            print(f"  LR: {lr:.2e} | Grad Norm: {grad_norm:.4f}")
+
             self.scheduler.step(test_loss)
-            
+
             if test_loss < best_loss:
                 best_loss = test_loss
                 patience_counter = 0
                 torch.save(self.model.state_dict(), self.save_dir / save_name)
-                print(f"✓ Saved checkpoint")
+                print(f"  ✓ Saved checkpoint")
             else:
                 patience_counter += 1
                 if patience_counter >= patience:
-                    print(f"\nEarly stopping")
+                    print(f"\nEarly stopping triggered")
                     break
-        
-        print(f"\nDone! Best loss: {best_loss:.6f}")
-    
+            
+            # Generate prediction visualizations
+            if (epoch + 1) % viz_every == 0:
+                print(f"  Generating predictions...")
+                epoch_viz_dir = viz_dir / f'epoch_{epoch+1:03d}'
+                epoch_viz_dir.mkdir(exist_ok=True, parents=True)
+                
+                trainer_visualizer.plot_predictions(
+                    self.model, 
+                    self.test_loader.dataset, 
+                    device=self.device, 
+                    n=n_viz_samples, 
+                    save_dir=epoch_viz_dir, 
+                    show=False
+                )
+                
+                # Also update training history plot
+                trainer_visualizer.plot_training_history(
+                    self.history, 
+                    save_dir=viz_dir, 
+                    show=False
+                )
+
+        print(f"\nTraining complete! Best test loss: {best_loss:.6f}")
+
     def load(self, path):
         self.model.load_state_dict(torch.load(path))
         print(f"Loaded {path}")
+
+
+if __name__ == "__main__":
+    data_dir = 'augmented_massive'
+    train_dataset = LithographyDataset(data_dir, split='train')
+    test_dataset = LithographyDataset(data_dir, split='test')
+
+    # train_dataset = Subset(train_dataset, range(100))
+    # test_dataset = Subset(test_dataset, range(20))
+
+    print(f"Train samples: {len(train_dataset)}")
+    print(f"Test samples: {len(test_dataset)}")
+
+    model = LithographyUNet(base_ch=64)
+    w_resist = 1.0
+    w_intensity = 0.3
+    edge_weight = 2.0
+
+    criterion = MultiHeadLoss(w_resist=w_resist, w_intensity=w_intensity, edge_weight=edge_weight)
+    
+    batch_size = 16
+    num_workers = 4
+    lr = 1e-4
+    device = 'cuda'
+    save_dir = './checkpoints'
+    epochs = 50
+
+    trainer = Trainer(
+        model=model,
+        criterion=criterion,
+        train_dataset=train_dataset,
+        test_dataset=test_dataset,
+        batch_size=batch_size,
+        num_workers=num_workers,
+        device=device,
+        lr=lr,
+        save_dir=save_dir
+    )
+
+    trainer.train(epochs=epochs, save_name='best_model.pth')
+    
+    trainer_visualizer.plot_training_history(trainer.history, save_dir=Path(save_dir)/'visualizations', show=True)
+    trainer_visualizer.plot_predictions(model, test_dataset, device=device, n=6, save_dir=Path(save_dir)/'visualizations', show=True)
