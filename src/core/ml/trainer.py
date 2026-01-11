@@ -9,8 +9,6 @@ from tqdm import tqdm
 from src.core.ml.models import LithographyDataset, LithographyUNet
 from src.core.ml.losses import MultiHeadLoss
 import src.visualizers.ml.trainer_visualizer as trainer_visualizer
-from torch.utils.data import Subset
-
 
 
 def compute_mae(pred, target):
@@ -89,6 +87,10 @@ class Trainer:
         self.model.train()
         total_loss = 0.0
         grad_norms = []
+        
+        # Diagnostic accumulators
+        intensity_pred_stats = []
+        resist_pred_stats = []
 
         for batch in tqdm(self.train_loader, desc='Train'):
             batch = self.move_to_device(batch)
@@ -107,9 +109,38 @@ class Trainer:
             self.optimizer.step()
 
             total_loss += loss.item()
+            
+            # Collect prediction statistics
+            intensity_pred_stats.append({
+                'min': pred_int.min().item(),
+                'max': pred_int.max().item(),
+                'mean': pred_int.mean().item(),
+                'std': pred_int.std().item()
+            })
+            resist_pred_stats.append({
+                'min': pred_res.min().item(),
+                'max': pred_res.max().item(),
+                'mean': pred_res.mean().item(),
+                'std': pred_res.std().item()
+            })
 
         avg_grad_norm = np.mean(grad_norms)
-        return total_loss / len(self.train_loader), avg_grad_norm
+        
+        # Aggregate statistics
+        intensity_stats = {
+            'min': np.mean([s['min'] for s in intensity_pred_stats]),
+            'max': np.mean([s['max'] for s in intensity_pred_stats]),
+            'mean': np.mean([s['mean'] for s in intensity_pred_stats]),
+            'std': np.mean([s['std'] for s in intensity_pred_stats])
+        }
+        resist_stats = {
+            'min': np.mean([s['min'] for s in resist_pred_stats]),
+            'max': np.mean([s['max'] for s in resist_pred_stats]),
+            'mean': np.mean([s['mean'] for s in resist_pred_stats]),
+            'std': np.mean([s['std'] for s in resist_pred_stats])
+        }
+        
+        return total_loss / len(self.train_loader), avg_grad_norm, intensity_stats, resist_stats
 
     def evaluate(self):
         self.model.eval()
@@ -122,6 +153,12 @@ class Trainer:
         resist_mae_sum = 0.0
         resist_rmse_sum = 0.0
         resist_psnr_sum = 0.0
+        
+        # Diagnostic accumulators
+        intensity_pred_stats = []
+        resist_pred_stats = []
+        intensity_target_stats = []
+        resist_target_stats = []
 
         with torch.no_grad():
             for batch in tqdm(self.test_loader, desc='Eval'):
@@ -140,6 +177,28 @@ class Trainer:
                 resist_mae_sum += compute_mae(pred_res, target_res)
                 resist_rmse_sum += compute_rmse(pred_res, target_res)
                 resist_psnr_sum += compute_psnr(pred_res, target_res)
+                
+                # Collect prediction statistics
+                intensity_pred_stats.append({
+                    'min': pred_int.min().item(),
+                    'max': pred_int.max().item(),
+                    'mean': pred_int.mean().item()
+                })
+                resist_pred_stats.append({
+                    'min': pred_res.min().item(),
+                    'max': pred_res.max().item(),
+                    'mean': pred_res.mean().item()
+                })
+                intensity_target_stats.append({
+                    'min': target_int.min().item(),
+                    'max': target_int.max().item(),
+                    'mean': target_int.mean().item()
+                })
+                resist_target_stats.append({
+                    'min': target_res.min().item(),
+                    'max': target_res.max().item(),
+                    'mean': target_res.mean().item()
+                })
 
         n_batches = len(self.test_loader)
         metrics = {
@@ -149,7 +208,27 @@ class Trainer:
             'intensity_psnr': intensity_psnr_sum / n_batches,
             'resist_mae': resist_mae_sum / n_batches,
             'resist_rmse': resist_rmse_sum / n_batches,
-            'resist_psnr': resist_psnr_sum / n_batches
+            'resist_psnr': resist_psnr_sum / n_batches,
+            'intensity_pred_stats': {
+                'min': np.mean([s['min'] for s in intensity_pred_stats]),
+                'max': np.mean([s['max'] for s in intensity_pred_stats]),
+                'mean': np.mean([s['mean'] for s in intensity_pred_stats])
+            },
+            'resist_pred_stats': {
+                'min': np.mean([s['min'] for s in resist_pred_stats]),
+                'max': np.mean([s['max'] for s in resist_pred_stats]),
+                'mean': np.mean([s['mean'] for s in resist_pred_stats])
+            },
+            'intensity_target_stats': {
+                'min': np.mean([s['min'] for s in intensity_target_stats]),
+                'max': np.mean([s['max'] for s in intensity_target_stats]),
+                'mean': np.mean([s['mean'] for s in intensity_target_stats])
+            },
+            'resist_target_stats': {
+                'min': np.mean([s['min'] for s in resist_target_stats]),
+                'max': np.mean([s['max'] for s in resist_target_stats]),
+                'mean': np.mean([s['mean'] for s in resist_target_stats])
+            }
         }
         
         return metrics
@@ -165,7 +244,7 @@ class Trainer:
         viz_dir.mkdir(exist_ok=True, parents=True)
 
         for epoch in range(epochs):
-            train_loss, grad_norm = self.train_epoch()
+            train_loss, grad_norm, train_int_stats, train_res_stats = self.train_epoch()
             metrics = self.evaluate()
             test_loss = metrics['loss']
 
@@ -183,11 +262,22 @@ class Trainer:
             self.history['resist_rmse'].append(metrics['resist_rmse'])
             self.history['resist_psnr'].append(metrics['resist_psnr'])
 
-            print(f"Epoch {epoch+1}/{epochs}")
+            print(f"\nEpoch {epoch+1}/{epochs}")
             print(f"  Loss - Train: {train_loss:.6f} | Test: {test_loss:.6f}")
             print(f"  Intensity - MAE: {metrics['intensity_mae']:.4f} | RMSE: {metrics['intensity_rmse']:.4f} | PSNR: {metrics['intensity_psnr']:.2f} dB")
             print(f"  Resist    - MAE: {metrics['resist_mae']:.4f} | RMSE: {metrics['resist_rmse']:.4f} | PSNR: {metrics['resist_psnr']:.2f} dB")
             print(f"  LR: {lr:.2e} | Grad Norm: {grad_norm:.4f}")
+            
+            # DIAGNOSTIC OUTPUT
+            print(f"\n  [DIAGNOSTIC] Train Predictions:")
+            print(f"    Intensity: min={train_int_stats['min']:.4f}, max={train_int_stats['max']:.4f}, mean={train_int_stats['mean']:.4f}, std={train_int_stats['std']:.4f}")
+            print(f"    Resist:    min={train_res_stats['min']:.4f}, max={train_res_stats['max']:.4f}, mean={train_res_stats['mean']:.4f}, std={train_res_stats['std']:.4f}")
+            
+            print(f"  [DIAGNOSTIC] Test Predictions vs Targets:")
+            print(f"    Intensity Pred:   min={metrics['intensity_pred_stats']['min']:.4f}, max={metrics['intensity_pred_stats']['max']:.4f}, mean={metrics['intensity_pred_stats']['mean']:.4f}")
+            print(f"    Intensity Target: min={metrics['intensity_target_stats']['min']:.4f}, max={metrics['intensity_target_stats']['max']:.4f}, mean={metrics['intensity_target_stats']['mean']:.4f}")
+            print(f"    Resist Pred:      min={metrics['resist_pred_stats']['min']:.4f}, max={metrics['resist_pred_stats']['max']:.4f}, mean={metrics['resist_pred_stats']['mean']:.4f}")
+            print(f"    Resist Target:    min={metrics['resist_target_stats']['min']:.4f}, max={metrics['resist_target_stats']['max']:.4f}, mean={metrics['resist_target_stats']['mean']:.4f}")
 
             self.scheduler.step(test_loss)
 
@@ -236,15 +326,20 @@ if __name__ == "__main__":
     train_dataset = LithographyDataset(data_dir, split='train')
     test_dataset = LithographyDataset(data_dir, split='test')
 
-    # train_dataset = Subset(train_dataset, range(100))
-    # test_dataset = Subset(test_dataset, range(20))
-
     print(f"Train samples: {len(train_dataset)}")
     print(f"Test samples: {len(test_dataset)}")
+    
+    # Diagnostic: Check data ranges
+    print("\nChecking data ranges...")
+    sample_mask, sample_illum, sample_int, sample_res = train_dataset[0]
+    print(f"Mask range: [{sample_mask.min():.4f}, {sample_mask.max():.4f}]")
+    print(f"Illumination range: [{sample_illum.min():.4f}, {sample_illum.max():.4f}]")
+    print(f"Intensity range: [{sample_int.min():.4f}, {sample_int.max():.4f}]")
+    print(f"Resist range: [{sample_res.min():.4f}, {sample_res.max():.4f}]")
 
     model = LithographyUNet(base_ch=64)
     w_resist = 1.0
-    w_intensity = 0.3
+    w_intensity = 3.0  # Increase intensity weight since targets are smaller scale
     edge_weight = 2.0
 
     criterion = MultiHeadLoss(w_resist=w_resist, w_intensity=w_intensity, edge_weight=edge_weight)
@@ -268,7 +363,12 @@ if __name__ == "__main__":
         save_dir=save_dir
     )
 
-    trainer.train(epochs=epochs, save_name='best_model.pth')
+    trainer.train(epochs=epochs, save_name='best_model.pth', viz_every=1, n_viz_samples=6)
+    
+    # Final visualizations
+    print("\nGenerating final visualizations...")
+    final_viz_dir = Path(save_dir) / 'visualizations' / 'final'
+    final_viz_dir.mkdir(exist_ok=True, parents=True)
     
     trainer_visualizer.plot_training_history(trainer.history, save_dir=Path(save_dir)/'visualizations', show=True)
-    trainer_visualizer.plot_predictions(model, test_dataset, device=device, n=6, save_dir=Path(save_dir)/'visualizations', show=True)
+    trainer_visualizer.plot_predictions(model, test_dataset, device=device, n=6, save_dir=final_viz_dir, show=True)

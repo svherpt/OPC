@@ -86,6 +86,12 @@ class LithographyUNet(nn.Module):
 
         self.head_intensity = nn.Conv2d(base_ch, 1, 1)
         self.head_resist = nn.Conv2d(base_ch, 1, 1)
+        
+        # Initialize output heads with better initialization
+        nn.init.xavier_uniform_(self.head_intensity.weight, gain=1.0)
+        nn.init.constant_(self.head_intensity.bias, 0.1)  # Small positive bias for intensity
+        nn.init.xavier_uniform_(self.head_resist.weight, gain=1.0)
+        nn.init.constant_(self.head_resist.bias, 0.0)
 
         total_params = sum(p.numel() for p in self.parameters())
         print(f"Model initialized with {total_params:,} parameters")
@@ -116,8 +122,9 @@ class LithographyUNet(nn.Module):
         d2 = self.dec2(torch.cat([self.up2(d3), e2], dim=1))
         d1 = self.dec1(torch.cat([self.up1(d2), e1], dim=1))
 
-        intensity = torch.clamp(self.head_intensity(d1), 0.0, 1.0)
-        resist = torch.clamp(self.head_resist(d1), 0.0, 1.0)
+        # Apply heads - use sigmoid instead of clamp for better gradient flow
+        intensity = torch.sigmoid(self.head_intensity(d1))
+        resist = torch.sigmoid(self.head_resist(d1))
         return intensity, resist
 
     def predict(self, mask_np, illum_np):
