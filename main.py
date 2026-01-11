@@ -1,4 +1,5 @@
 import numpy as np
+from src.core.ml.models import LithographyUNet
 import src.core.simulator.lithography_simulator as simulator
 import src.visualizers.simulator.simulation_visualizer as simulation_visualizer
 import src.core.simulator.masks as masks
@@ -12,7 +13,7 @@ import src.core.simulator.light_sources as light_sources
 import time
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
-import trainer_visualizer as trainer_visualizer
+import src.visualizers.ml.trainer_visualizer as trainer_visualizer
 
 
 with open("sim_config.json", "r") as f:
@@ -51,28 +52,63 @@ def main():
     # test_ML_model()
     # optimize_model_multihead()
 
-    visualize_dataloader_sample('./data/augmented_massive', split="train", batch_size=1, index_in_batch=0)
+    # visualize_dataloader_sample('./data/augmented_massive', split="train", batch_size=1, index_in_batch=0)
+    while True:
+        test_ML_model()
+
 
 def test_ML_model():
-    inferer = Inferer(modelClass=MultiTargetUNet, model_name='litho_surrogate_multi_good.pth', device='cuda', base_ch=64)
+    model = LithographyUNet(base_ch=64)
+    model.load_state_dict(torch.load('./models/best_model.pth', map_location='cpu'))
     
-    img = masks.read_mask_from_img('ganopc-data/artitgt/10605.glp.png')
-    intensity, resist = inferer.predict(img)
+    num_samples = 4
+    maskList = [masks.get_random_dataset_mask('ganopc-data/artitgt', **sim_config) for _ in range(num_samples)]
+    illumList = [light_sources.read_random_illumination_quarter('augmented_massive/test/illuminations', **sim_config) for _ in range(num_samples)]
+
+    results = zip(maskList, illumList)
+
+    fig, axes = plt.subplots(num_samples, 6, figsize=(20, 3.5*num_samples))
+
+    for idx, (mask, illum) in enumerate(results):
+        pred_intensity, pred_resist = model.predict(mask, illum)
+        #make illum to full quadrant
+        full_illumination = light_sources.quadrant_to_full(illum)   
+
+        litho_sim = simulator.LithographySimulator(sim_config)
+        results = litho_sim.simulate(mask, full_illumination)
+        target_intensity = results['wafer_intensity']
+        target_resist = results['resist_profile']
 
 
-    #Print min and max
-    print(f"Predicted resist min: {resist.min()}, max: {resist.max()}")
+        axes[idx, 0].imshow(mask, cmap='gray')
+        axes[idx, 0].set_title("Input Mask")
+        axes[idx, 0].axis('off')
 
-    #show results
-    import matplotlib.pyplot as plt
-    fig, axs = plt.subplots(1, 3, figsize=(12, 4))
-    axs[0].imshow(img, cmap='gray')
-    axs[0].set_title('Input Mask')
-    axs[1].imshow(intensity, cmap='gray')
-    axs[1].set_title('Predicted Intensity')
-    axs[2].imshow(resist, cmap='gray')
-    axs[2].set_title('Predicted Resist')
+        #bi-linear interpolation to same size of mask
+        upsampled_illum = light_sources.upsample_illumination(full_illumination, target_size=mask.shape[0])
+        axes[idx, 1].imshow(upsampled_illum, cmap='hot')
+        axes[idx, 1].set_title("Input Illumination")
+        axes[idx, 1].axis('off')
+
+        axes[idx, 2].imshow(target_intensity, cmap='inferno')
+        axes[idx, 2].set_title("Target Intensity")
+        axes[idx, 2].axis('off')
+
+        axes[idx, 3].imshow(pred_intensity, cmap='inferno')
+        axes[idx, 3].set_title("Predicted Intensity")
+        axes[idx, 3].axis('off')
+
+        axes[idx, 4].imshow(target_resist, cmap='gray')
+        axes[idx, 4].set_title("Target Resist")
+        axes[idx, 4].axis('off')
+
+        axes[idx, 5].imshow(pred_resist, cmap='gray')
+        axes[idx, 5].set_title("Predicted Resist")
+        axes[idx, 5].axis('off')
+
+    plt.tight_layout()
     plt.show()
+
 
     
 
@@ -102,20 +138,6 @@ def optimize_model_multihead():
 
     optimization_visualizer.show_optimization_results(target_resist, optimized_mask, opt.model, litho_sim, history)
 
-
-def train_model(
-    data_dir='./data/augmented_massive',
-    save_dir='./checkpoints',
-    batch_size=16,
-    num_workers=4,
-    lr=1e-4,
-    epochs=50,
-    device='cuda',
-    edge_weight=2.0,
-    w_resist=1.0,
-    w_intensity=0.3
-):
-    
 
 def visualize_dataloader_sample(
     data_dir,

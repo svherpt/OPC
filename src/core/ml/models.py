@@ -126,7 +126,7 @@ class LithographyUNet(nn.Module):
         intensity = torch.sigmoid(self.head_intensity(d1))
         resist = torch.sigmoid(self.head_resist(d1))
         return intensity, resist
-
+    
     def predict(self, mask_np, illum_np):
         self.eval()
         device = next(self.parameters()).device

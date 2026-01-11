@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.ndimage import zoom
 import json
+import os
 
 def create_quadrant_source(quadrant_grid_size, numerical_aperture, wavelength_nm, illumination_type):
     max_spatial_frequency = numerical_aperture / wavelength_nm
@@ -33,6 +34,20 @@ def quadrant_to_full(quadrant_illumination):
     full_pupil = np.concatenate([top_half[::-1, :], top_half], axis=0)
     return full_pupil
 
+def read_illumination_quarter_from_file(file_path, **kwargs):
+    # illumination_size = kwargs.get("illumination_grid_size", 32)
+    illumination = plt.imread('./data/' + file_path)
+
+    #Return just a single quadrant
+    illumination = illumination[:illumination.shape[0]//2, :illumination.shape[1]//2]
+
+    return illumination
+
+def read_random_illumination_quarter(dir_path="ganopc-data/artitgt", **kwargs):
+    all_files = [f for f in os.listdir('./data/' + dir_path) if f.endswith('.png')]
+    random_file = np.random.choice(all_files)
+
+    return read_illumination_quarter_from_file(dir_path + "/" + random_file, **kwargs)
 
 def visualize_pupil(lowres_illumination, target_size=256, highres_illumination=None):
     """
