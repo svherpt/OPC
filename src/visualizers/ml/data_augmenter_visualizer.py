@@ -2,35 +2,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import json
 import src.core.simulator.masks as masks
-from src.core.ml.data_augmenter import MaskAugmenter
+from src.core.ml.data_augmenter import LightSourceAugmenter, MaskAugmenter
 
 
-def visualize_specific_augmentation(augmenter, mask, augmentation_name, **kwargs):
-    fig, axes = plt.subplots(1, 2, figsize=(20, 10))
-    
-    # Original
-    axes[0].imshow(mask, cmap='gray', interpolation='nearest')
-    axes[0].set_title('Original', fontsize=14, fontweight='bold')
-    axes[0].axis('off')
-    
-    # Augmented
-    method = getattr(augmenter, augmentation_name)
-    augmented = method(mask, **kwargs)
-    axes[1].imshow(augmented, cmap='gray', interpolation='nearest')
-    
-    params_str = ', '.join([f'{k}={v}' for k, v in kwargs.items()])
-    axes[1].set_title(f'{augmentation_name}, params:({params_str})', fontsize=12)
-    axes[1].axis('off')
-
-    
-    plt.tight_layout(rect=[0, 0, 1, 0.95])
-    plt.savefig(f'./figures/{augmentation_name}_example.png', dpi=150)
-    plt.show()
-    
-    return augmented
-
-
-def visualize_augmentations(augmenter, mask, n_augmentations=5):
+def visualize_mask_augmentations(augmenter, mask, n_augmentations=5):
     fig, axes = plt.subplots(3, 3, figsize=(10, 10))
     axes = axes.flatten()
     
@@ -66,17 +41,40 @@ def visualize_augmentations(augmenter, mask, n_augmentations=5):
     plt.show()
 
 
+
+# Visualization of multiple augmented full illuminations
+def visualize_illumination_augmentations(illum_list, n_cols=5):
+    n_rows = int(np.ceil(len(illum_list)/n_cols))
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(3*n_cols, 3*n_rows))
+    axes = np.atleast_2d(axes)
+    for idx, illum in enumerate(illum_list):
+        r = idx // n_cols
+        c = idx % n_cols
+        ax = axes[r, c]
+        ax.imshow(illum, extent=(-1,1,-1,1), origin='lower')
+        ax.set_title(f"Sample {idx}", fontsize=10)
+        ax.axis('off')
+    # hide unused axes
+    for idx in range(len(illum_list), n_rows*n_cols):
+        r = idx // n_cols
+        c = idx % n_cols
+        axes[r, c].axis('off')
+    plt.tight_layout()
+    plt.show()
+
 if __name__ == "__main__":
     # Example usage with a simple test mask
     with open("sim_config.json", "r") as f:
         sim_config = json.load(f)
     
     random_mask = masks.get_random_dataset_mask('ganopc-data/artitgt', **sim_config)
-    augmenter = MaskAugmenter()
+    mask_augmenter = MaskAugmenter()
     
     # Visualize all augmentations
-    visualize_augmentations(augmenter, random_mask)
-    
-    random_mask = masks.get_random_dataset_mask('ganopc-data/artitgt', **sim_config)
-    visualize_specific_augmentation(augmenter, random_mask, 'add_bidirectional_boundary_noise')
+    visualize_mask_augmentations(mask_augmenter, random_mask)
+
+    augmenter = LightSourceAugmenter()
+    samples = [augmenter.augment_illumination(**sim_config) for _ in range(50)]
+    visualize_illumination_augmentations(samples, n_cols=5)
+
     

@@ -15,7 +15,7 @@ class LithographySimulator:
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.chunk_size = chunk_size
 
-        print(f"LithographySimulatorGPU initialized on device: {self.device}")
+        # print(f"LithographySimulatorGPU initialized on device: {self.device}")
 
     def simulate(self, mask, source_illumination):
         mask = torch.from_numpy(mask).to(self.device, dtype=torch.float32)
@@ -44,7 +44,9 @@ class LithographySimulator:
         total_intensity = torch.zeros_like(mask, dtype=torch.float32, device=self.device)
 
         # Get non-zero pupil points
-        pupil_indices = torch.nonzero(source_illumination, as_tuple=False)
+        threshold = 1e-6
+        pupil_indices = torch.nonzero(source_illumination > threshold, as_tuple=False)
+
         weights = source_illumination[pupil_indices[:,0], pupil_indices[:,1]]
 
         num_points = len(weights)

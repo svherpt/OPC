@@ -8,7 +8,12 @@ from PIL import Image
 import json
 import src.core.simulator.masks as masks
 import src.core.simulator.lithography_simulator as simulator
-
+import matplotlib.pyplot as plt
+import random
+from tqdm import tqdm
+from scipy.ndimage import rotate
+from scipy.ndimage import rotate, binary_dilation, binary_erosion
+from skimage.morphology import disk
 
 # Contains a bunch of different mask augmentation methods in order to generate 
 class MaskAugmenter:
@@ -346,86 +351,183 @@ class MaskAugmenter:
         
         return result
 
-    def save_dataset(self, masks_list, output_dir, sim_config, augmentations_per_mask=5, train_split=0.8):
-        output_dir = Path('./data/' + output_dir)
-        
-        # Create all directories
-        splits = ['train', 'test']
-        subdirs = ['inputs', 'intensities', 'resists']
-        
-        for split in splits:
-            for subdir in subdirs:
-                (output_dir / split / subdir).mkdir(parents=True, exist_ok=True)
-        
-        # Generate augmented data
-        augmented_batch, original_batch = self.batch_augment(
-            masks_list, augmentations_per_mask
-        )
-        
-        # Split into train/test
-        n_total = len(augmented_batch)
-        n_train = int(n_total * train_split)
-        
-        indices = np.arange(n_total)
-        np.random.shuffle(indices)
-        
-        split_indices = {
-            'train': indices[:n_train],
-            'test': indices[n_train:]
-        }
-        
-        # Process each split
-        for split_name, split_idx in split_indices.items():
-            split_dir = output_dir / split_name
-            
-            # Get base ID from existing files
-            base_id = len(list((split_dir / 'inputs').glob("*.png")))
-            
-            print(f"\nGenerating {split_name} dataset...")
-            for idx, data_idx in enumerate(split_idx):
-                if idx % 100 == 0:
-                    print(f"Processing {split_name} sample {idx}/{len(split_idx)}")
 
-                file_id = base_id + idx
+class LightSourceAugmenter:
+    def __init__(self, seed=None):
+        if seed is not None:
+            np.random.seed(seed)
+            random.seed(seed)
 
-                # Save input mask
-                input_mask = augmented_batch[data_idx]
-                input_img = Image.fromarray((input_mask * 255).astype(np.uint8))
-                input_img.save(split_dir / 'inputs' / f"{file_id:06d}.png")
-                
-                # Run simulation
-                litho_sim = simulator.LithographySimulator(sim_config)
-                sim_results = litho_sim.simulate(input_mask)
-                
-                # Save wafer intensity
-                wafer_intensity = sim_results["wafer_intensity"]
-                intensity_normalized = (wafer_intensity * 255).astype(np.uint8)
-                intensity_img = Image.fromarray(intensity_normalized)
-                intensity_img.save(split_dir / 'intensities' / f"{file_id:06d}.png")
-                
-                # Save resist profile
-                resist_profile = sim_results["resist_profile"]
-                resist_normalized = (resist_profile * 255).astype(np.uint8)
-                resist_img = Image.fromarray(resist_normalized)
-                resist_img.save(split_dir / 'resists' / f"{file_id:06d}.png")
+    def generate_parametric_illumination(self, params, grid_size, max_spatial_frequency):
+        illumination = np.zeros((grid_size, grid_size), dtype=float)
+        x = np.linspace(0, max_spatial_frequency, grid_size)
+        y = np.linspace(0, max_spatial_frequency, grid_size)
+        X, Y = np.meshgrid(x, y)
 
-        print(f"\nDataset saved to {output_dir}")
-        print(f"Train samples: {len(split_indices['train'])}")
-        print(f"Test samples: {len(split_indices['test'])}")
+        n_modes = len(params) // 4
+        for i in range(n_modes):
+            xi, yi, sigma, intensity = params[4*i:4*i+4]
+            illumination += intensity * np.exp(-((X - xi)**2 + (Y - yi)**2) / (2 * sigma**2))
+
+        return np.clip(illumination, 0, 1)
+
+    def quadrant_to_full(self, quadrant_source):
+        top_half = np.concatenate([quadrant_source[:, ::-1], quadrant_source], axis=1)
+        full_source = np.concatenate([top_half[::-1, :], top_half], axis=0)
+        return full_source
+
+    def random_rotate(self, source, max_angle_deg=10):
+        angle = np.random.uniform(-max_angle_deg, max_angle_deg)
+        rotated = rotate(source, angle=angle, reshape=False, order=1, mode='nearest')
+        return rotated
+
+    def blend_modes(self, params_list, weights=None):
+        if weights is None:
+            weights = np.ones(len(params_list)) / len(params_list)
+        blended = np.zeros_like(params_list[0])
+        for p, w in zip(params_list, weights):
+            blended += w * np.array(p)
+        return blended
+
+    def add_boundary_noise(self, illumination, dilate_size=2, erosion_size=2, noise_scale=0.02):
+        mask = illumination > 0.05
+        dilated = binary_dilation(mask, disk(dilate_size))
+        erosion = binary_erosion(mask, disk(erosion_size))
+
+        expansion_region = dilated & (~mask)
+        erosion_region = mask & (~erosion)
+
+        noise = np.random.normal(0, noise_scale, size=illumination.shape)
+        illumination[expansion_region] += noise[expansion_region]
+        illumination[erosion_region] -= noise[erosion_region]
+
+        return np.clip(illumination, 0, 1)
+
+    def augment_illumination(self, illumination_grid_size, numerical_aperture, wavelength_nm, 
+                             base_modes_list=None, blending_prob=0.5, rotation_prob=0.5,
+                             jitter_scale=0.01, boundary_noise_prob=0.5, boundary_dilate=2, boundary_erode=2,
+                             boundary_noise_scale=0.1, **kwargs):
+        max_spatial_frequency = numerical_aperture / wavelength_nm
+
+        if base_modes_list is None:
+            n_modes = np.random.randint(2, 5)
+            base_modes_list = []
+            for _ in range(n_modes):
+                params = []
+                for _ in range(n_modes):
+                    xi = np.random.uniform(0.2, 0.8) * max_spatial_frequency
+                    yi = np.random.uniform(0.2, 0.8) * max_spatial_frequency
+                    sigma = np.random.uniform(0.02, 0.07) * max_spatial_frequency
+                    intensity = np.random.uniform(0.9, 1.1)
+                    params.extend([xi, yi, sigma, intensity])
+                base_modes_list.append(params)
+
+        if len(base_modes_list) > 1 and random.random() < blending_prob:
+            n_blend = np.random.randint(2, len(base_modes_list)+1)
+            selected = random.sample(base_modes_list, n_blend)
+            weights = np.random.dirichlet(np.ones(n_blend))
+            params = self.blend_modes(selected, weights)
+        else:
+            params = np.array(random.choice(base_modes_list))
+
+        jitter = np.random.uniform(-jitter_scale, jitter_scale, size=params.shape)
+        params = params * (1.0 + jitter)
+
+        illum_quadrant = self.generate_parametric_illumination(params, illumination_grid_size, max_spatial_frequency)
+        full_source = self.quadrant_to_full(illum_quadrant)
+
+        if random.random() < rotation_prob:
+            full_source = self.random_rotate(full_source, max_angle_deg=10)
+
+        if random.random() < boundary_noise_prob:
+            full_source = self.add_boundary_noise(full_source, dilate_size=boundary_dilate,
+                                                  erosion_size=boundary_erode, noise_scale=boundary_noise_scale)
+
+        return np.clip(full_source, 0, 1)
+
+def save_dataset(mask_illumination_simtriplets, output_dir, train_split=0.8):
+    output_dir = Path("./data/" + output_dir)
+    splits = ['train', 'test']
+    subdirs = ['masks', 'illuminations', 'intensities', 'resists']
+
+    for split in splits:
+        for subdir in subdirs:
+            (output_dir / split / subdir).mkdir(parents=True, exist_ok=True)
+
+    n_total = len(mask_illumination_simtriplets)
+    n_train = int(n_total * train_split)
+    indices = np.arange(n_total)
+    np.random.shuffle(indices)
+    split_indices = {
+        'train': indices[:n_train],
+        'test': indices[n_train:]
+    }
 
 
-def generate_n_augmentations(num_masks, n_augmentations=5, output_dir='augmented_medium'):
-    augmenter = MaskAugmenter()
+    for split_name, split_idx in split_indices.items():
+        split_dir = output_dir / split_name
 
-    random_masks = masks.get_dataset_masks('ganopc-data/artitgt', num_masks, **sim_config)
-    augmenter.save_dataset(random_masks, output_dir=output_dir, sim_config=sim_config, augmentations_per_mask=n_augmentations, train_split=0.8)
+        #Get num files already in masks to continue numbering
+        existing_files = list((split_dir / 'masks').glob('*.png'))
+        start_id = len(existing_files)
 
+        for idx, data_idx in enumerate(split_idx):
+            mask, illumination, sim_results = mask_illumination_simtriplets[data_idx]
+
+            file_id = start_id + idx
+
+            # Save input mask
+            mask_img = Image.fromarray((mask * 255).astype(np.uint8))
+            mask_img.save(split_dir / 'masks' / f"{file_id:06d}.png")
+
+            # Save illumination
+            illum_img = Image.fromarray((illumination * 255).astype(np.uint8))
+            illum_img.save(split_dir / 'illuminations' / f"{file_id:06d}.png")
+
+            # Save wafer intensity
+            wafer_intensity = sim_results["wafer_intensity"]
+            intensity_img = Image.fromarray((wafer_intensity * 255).astype(np.uint8))
+            intensity_img.save(split_dir / 'intensities' / f"{file_id:06d}.png")
+
+            # Save resist profile
+            resist_profile = sim_results["resist_profile"]
+            resist_img = Image.fromarray((resist_profile * 255).astype(np.uint8))
+            resist_img.save(split_dir / 'resists' / f"{file_id:06d}.png")
+
+
+def generate_n_augmentations(num_masks, num_illuminations, augmentations_per_mask, output_dir, sim_config):
+    mask_augmenter = MaskAugmenter()
+    light_source_augmenter = LightSourceAugmenter()
+
+    #Generate base masks
+    base_masks = masks.get_dataset_masks('ganopc-data/artitgt', num_masks, **sim_config)
+    augmented_masks = []
+    for mask in base_masks:
+        for _ in range(augmentations_per_mask):
+            augmented_masks.append(mask_augmenter.random_augmentation(mask))
+
+    #Generate illuminations
+    illumination_list = [light_source_augmenter.augment_illumination(
+        illumination_grid_size=32,  # quarter grid
+        numerical_aperture=sim_config["numerical_aperture"],
+        wavelength_nm=sim_config["wavelength_nm"]
+    ) for _ in range(num_illuminations)]
+
+    #Pair masks with 50 random illuminations each
+    mask_illumination_pairs = []
+    for mask in augmented_masks:
+        selected_illuminations = random.sample(illumination_list, num_illuminations)
+        for illum in selected_illuminations:
+            sim_results = simulator.LithographySimulator(sim_config).simulate(mask, illum)
+            mask_illumination_pairs.append((mask, illum, sim_results))
+
+    save_dataset(mask_illumination_pairs, output_dir)
 
 if __name__ == "__main__":
     with open("sim_config.json", "r") as f:
         sim_config = json.load(f)
 
-    generate_n_augmentations(10, 1, output_dir='test')
+    # generate_n_augmentations(num_masks=10, num_illuminations=10, augmentations_per_mask=5,output_dir='test', sim_config=sim_config)
 
-    # for i in range(5):
-    #     generate_n_augmentations(1000, 10, output_dir='./augmented_massive')
+    for i in tqdm(range(5000), desc="Generating batches"):
+        generate_n_augmentations(num_masks=2, num_illuminations=1, augmentations_per_mask=5, output_dir='augmented_massive', sim_config=sim_config)

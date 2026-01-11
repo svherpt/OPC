@@ -27,7 +27,7 @@ def main():
     litho_sim = simulator.LithographySimulator(sim_config)
     source_illumination = light_sources.get_source_grid(sim_config)  # shape: (Npupil, Npupil)
 
-    random_mask = masks.read_mask_from_img('ganopc-data/artitgt/1.glp.png', **sim_config)
+    random_mask = masks.read_mask_from_img('ganopc-data/artitgt/878.glp.png', **sim_config)
 
     t0 = time.time()
     simResults = litho_sim.simulate(random_mask, source_illumination)
