@@ -17,8 +17,9 @@ class LithographySimulator:
 
         # print(f"LithographySimulatorGPU initialized on device: {self.device}")
 
-    def simulate(self, mask, source_illumination):
+    def simulate(self, mask, source_illum_quadrant):
         mask = torch.from_numpy(mask).to(self.device, dtype=torch.float32)
+        source_illumination = light_sources.quadrant_to_full(source_illum_quadrant)
         source_illumination = torch.from_numpy(source_illumination).to(self.device, dtype=torch.float32)
         mask_size = mask.shape[0]
         pupil_size = source_illumination.shape[0]
@@ -140,7 +141,7 @@ if __name__ == "__main__":
 
     # Random mask example
     random_mask = masks.read_mask_from_img('ganopc-data/artitgt/1.glp.png', **sim_config)
-    illumination = light_sources.get_source_grid(sim_config)
+    illumination = light_sources.get_full_illumination(sim_config)
     masks.visualise_mask(random_mask)
     simulator = LithographySimulatorGPU(sim_config, device='cuda')
     out = simulator.simulate(random_mask, illumination)

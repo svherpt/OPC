@@ -6,7 +6,7 @@ from tqdm import tqdm
 from PIL import Image
 
 
-class MaskOptimizer:
+class SourceMaskOptimizer:
     def __init__(self, modelClass, modelPath, device='cuda'):
         self.device = torch.device(device if torch.cuda.is_available() else 'cpu')
         self.model = modelClass().to(self.device)
@@ -69,7 +69,8 @@ class MaskOptimizer:
         
         return resist_loss + coverage_weight * coverage_loss + binary_weight * binary_penalty, resist_loss, binary_penalty
 
-    def optimize(self, target_resist, num_iterations=2000, lr=0.15, initial_blur=8.0, final_blur=0.5, binarize_final=False, binary_iterations=300):
+    def optimize(self, target_resist, illumination_shape, num_iterations=2000, lr_mask=0.15, lr_illum=0.1, 
+                 initial_blur_mask=8.0, final_blur_mask=0.5, blur_illum=1.0, binarize_final=False, binary_iterations=300):
         
         target = torch.from_numpy(target_resist.astype(np.float32)).to(self.device)
         target = target.unsqueeze(0).unsqueeze(0)
@@ -78,7 +79,13 @@ class MaskOptimizer:
         init_mask = np.random.rand(*target_resist.shape).astype(np.float32)
         mask_param = nn.Parameter(torch.from_numpy(init_mask).float().unsqueeze(0).unsqueeze(0).to(self.device))
 
-        optimizer = torch.optim.Adam([mask_param], lr=lr)
+        init_illum = np.random.rand(*illumination_shape).astype(np.float32)
+        illum_param = nn.Parameter(torch.from_numpy(init_illum).float().unsqueeze(0).unsqueeze(0).to(self.device))
+
+        optimizer = torch.optim.Adam([
+            {'params': [mask_param], 'lr': lr_mask},
+            {'params': [illum_param], 'lr': lr_illum}
+        ])
 
         history = {
             "loss": [],
@@ -86,24 +93,28 @@ class MaskOptimizer:
             "resist_loss": [],
             "binary_penalty": [],
             "temperature": [],
-            "mask_snapshots": []
+            "mask_snapshots": [],
+            "illum_snapshots": []
         }
 
         total_iterations = num_iterations + (binary_iterations if binarize_final else 0)
-        pbar = tqdm(range(total_iterations), desc="Optimizing mask")
+        pbar = tqdm(range(total_iterations), desc="Optimizing source and mask")
 
         for i in pbar:
             optimizer.zero_grad()
 
             in_binary_phase = binarize_final and i >= num_iterations
-            blur_sigma, temperature = self.compute_schedules(i, num_iterations, initial_blur, final_blur, in_binary_phase, binary_iterations)
+            blur_sigma_mask, temperature = self.compute_schedules(i, num_iterations, initial_blur_mask, final_blur_mask, in_binary_phase, binary_iterations)
             
             # Apply blur and clamp to [0,1]
-            mask_blurred = self.gaussian_blur(mask_param, blur_sigma)
+            mask_blurred = self.gaussian_blur(mask_param, blur_sigma_mask)
             mask = torch.clamp(mask_blurred, 0.0, 1.0)
             
+            illum_blurred = self.gaussian_blur(illum_param, blur_illum)
+            illumination = torch.clamp(illum_blurred, 0.0, 1.0)
+            
             # Run through lithography model
-            pred_intensity, pred_resist = self.model(mask)
+            pred_intensity, pred_resist = self.model(mask, illumination)
 
             if not in_binary_phase:
                 # Phase 1: Temperature annealing from intensity to resist
@@ -116,7 +127,7 @@ class MaskOptimizer:
                 binary_penalty_val = binary_penalty.item()
 
             loss.backward()
-            torch.nn.utils.clip_grad_norm_([mask_param], max_norm=1.0)
+            torch.nn.utils.clip_grad_norm_([mask_param, illum_param], max_norm=1.0)
             optimizer.step()
 
             # Log metrics
@@ -129,10 +140,11 @@ class MaskOptimizer:
 
                 if i % 10 == 0:
                     history["mask_snapshots"].append(mask.squeeze().cpu().numpy().copy())
+                    history["illum_snapshots"].append(illumination.squeeze().cpu().numpy().copy())
 
             if i % 20 == 0:
                 phase = "BINARY" if in_binary_phase else "CONT"
-                postfix = {"phase": phase, "loss": f"{loss.item():.6f}", "temp": f"{temperature:.2f}", "blur": f"{blur_sigma:.2f}"}
+                postfix = {"phase": phase, "loss": f"{loss.item():.6f}", "temp": f"{temperature:.2f}", "blur_m": f"{blur_sigma_mask:.2f}"}
                 if in_binary_phase:
                     postfix["bin_pen"] = f"{binary_penalty_val:.4f}"
                 pbar.set_postfix(postfix)
@@ -141,12 +153,18 @@ class MaskOptimizer:
         with torch.no_grad():
             mask_final = self.gaussian_blur(mask_param, 0.1)
             mask_final = torch.clamp(mask_final, 0.0, 1.0)
-            result = mask_final.squeeze().cpu().numpy()
+            mask_result = mask_final.squeeze().cpu().numpy()
+            
+            illum_final = self.gaussian_blur(illum_param, blur_illum)
+            illum_final = torch.clamp(illum_final, 0.0, 1.0)
+            illum_result = illum_final.squeeze().cpu().numpy()
 
         print(f"\nSaved {len(history['mask_snapshots'])} frames for animation")
         
         if binarize_final:
-            edges = np.sum((result > 0.1) & (result < 0.9))
-            print(f"Binary quality: {100*(1-edges/result.size):.1f}% of pixels are near 0 or 1")
+            edges = np.sum((mask_result > 0.1) & (mask_result < 0.9))
+            print(f"Mask binary quality: {100*(1-edges/mask_result.size):.1f}% of pixels are near 0 or 1")
+        
+        print(f"Illumination range: [{illum_result.min():.3f}, {illum_result.max():.3f}], mean: {illum_result.mean():.3f}")
 
-        return result, history
+        return mask_result, illum_result, history

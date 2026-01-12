@@ -403,7 +403,7 @@ class LightSourceAugmenter:
 
         return np.clip(illumination, 0, 1)
 
-    def augment_illumination(self, illumination_grid_size, numerical_aperture, wavelength_nm, 
+    def augment_illumination(self, quadrant_illum_grid_size, numerical_aperture, wavelength_nm, 
                              base_modes_list=None, blending_prob=0.5, rotation_prob=0.5,
                              jitter_scale=0.01, boundary_noise_prob=0.5, boundary_dilate=2, boundary_erode=2,
                              boundary_noise_scale=0.1, **kwargs):
@@ -433,7 +433,7 @@ class LightSourceAugmenter:
         jitter = np.random.uniform(-jitter_scale, jitter_scale, size=params.shape)
         params = params * (1.0 + jitter)
 
-        illum_quadrant = self.generate_parametric_illumination(params, illumination_grid_size, max_spatial_frequency)
+        illum_quadrant = self.generate_parametric_illumination(params, quadrant_illum_grid_size, max_spatial_frequency)
         full_source = self.quadrant_to_full(illum_quadrant)
 
         if random.random() < rotation_prob:
@@ -508,7 +508,7 @@ def generate_n_augmentations(num_masks, num_illuminations, augmentations_per_mas
 
     #Generate illuminations
     illumination_list = [light_source_augmenter.augment_illumination(
-        illumination_grid_size=32,  # quarter grid
+        quadrant_illum_grid_size=32,  # quarter grid
         numerical_aperture=sim_config["numerical_aperture"],
         wavelength_nm=sim_config["wavelength_nm"]
     ) for _ in range(num_illuminations)]

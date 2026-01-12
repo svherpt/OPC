@@ -4,11 +4,16 @@ from scipy.ndimage import zoom
 import json
 import os
 
-def create_quadrant_source(quadrant_grid_size, numerical_aperture, wavelength_nm, illumination_type):
+def create_quadrant_source(config):
+    quadrant_illum_grid_size = config.get("quadrant_illum_grid_size", 64)
+    numerical_aperture = config.get("numerical_aperture", 1.35)
+    wavelength_nm = config.get("wavelength_nm", 193)
+    illumination_type = config.get("illumination_type", "conventional")
+    
     max_spatial_frequency = numerical_aperture / wavelength_nm
     spatial_frequency_x, spatial_frequency_y = np.meshgrid(
-        np.linspace(0, max_spatial_frequency, quadrant_grid_size),
-        np.linspace(0, max_spatial_frequency, quadrant_grid_size)
+        np.linspace(0, max_spatial_frequency, quadrant_illum_grid_size),
+        np.linspace(0, max_spatial_frequency, quadrant_illum_grid_size)
     )
     source_illumination = np.zeros_like(spatial_frequency_x)
 
@@ -22,11 +27,10 @@ def create_quadrant_source(quadrant_grid_size, numerical_aperture, wavelength_nm
         source_illumination += np.exp(
             -((spatial_frequency_x - spot_distance)**2 + spatial_frequency_y**2) / (2 * spot_sigma**2)
         )
-
     else:
         raise ValueError(f"Unknown illumination_type: {illumination_type}")
 
-    return source_illumination, spatial_frequency_x, spatial_frequency_y
+    return source_illumination
 
 
 def quadrant_to_full(quadrant_illumination):
@@ -35,7 +39,7 @@ def quadrant_to_full(quadrant_illumination):
     return full_pupil
 
 def read_illumination_quarter_from_file(file_path, **kwargs):
-    # illumination_size = kwargs.get("illumination_grid_size", 32)
+    # illumination_size = kwargs.get("quadrant_illum_grid_size", 32)
     illumination = plt.imread('./data/' + file_path)
 
     #Return just a single quadrant
@@ -83,17 +87,8 @@ def visualize_pupil(lowres_illumination, target_size=256, highres_illumination=N
 
 
 
-def get_source_grid(config):
-    illumination_grid_size = config.get("illumination_grid_size", 64)
-    numerical_aperture = config.get("numerical_aperture", 1.35)
-    wavelength_nm = config.get("wavelength_nm", 193)
-    illumination_type = config.get("illumination_type", "conventional")
-
-    quadrant_grid_size = illumination_grid_size // 2
-    quadrant_source, freq_x, freq_y = create_quadrant_source(
-        quadrant_grid_size, numerical_aperture, wavelength_nm, illumination_type
-    )
-
+def get_full_illumination(config):
+    quadrant_source = create_quadrant_source(config)
     full_illumination = quadrant_to_full(quadrant_source)
     return full_illumination
 
@@ -109,6 +104,6 @@ if __name__ == "__main__":
     with open("sim_config.json", "r") as f:
         sim_config = json.load(f)
 
-    lowres_source_illumination = get_source_grid(sim_config)
-    true_highres_source = get_source_grid({**sim_config, "illumination_grid_size": 256})  # or already generated
+    lowres_source_illumination = get_full_illumination(sim_config)
+    true_highres_source = get_full_illumination({**sim_config, "quadrant_illum_grid_size": 256})  # or already generated
     visualize_pupil(lowres_source_illumination, highres_illumination=true_highres_source)
