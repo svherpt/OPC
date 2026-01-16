@@ -27,6 +27,21 @@ def create_quadrant_source(config):
         source_illumination += np.exp(
             -((spatial_frequency_x - spot_distance)**2 + spatial_frequency_y**2) / (2 * spot_sigma**2)
         )
+    elif illumination_type == "quadruple":
+        spot_distance = 0.6 * max_spatial_frequency
+        spot_sigma = 0.05 * max_spatial_frequency
+        source_illumination += np.exp(
+            -((spatial_frequency_x - spot_distance)**2 + spatial_frequency_y**2) / (2 * spot_sigma**2)
+        )
+        source_illumination += np.exp(
+            -((spatial_frequency_x)**2 + (spatial_frequency_y - spot_distance)**2) / (2 * spot_sigma**2)
+        )
+    elif illumination_type == "annular":
+        inner_radius = 0.4 * max_spatial_frequency
+        outer_radius = 0.8 * max_spatial_frequency
+        radial_distance = np.sqrt(spatial_frequency_x**2 + spatial_frequency_y**2)
+        annular_mask = (radial_distance > inner_radius) & (radial_distance < outer_radius)
+        source_illumination[annular_mask] = 1.0 
     else:
         raise ValueError(f"Unknown illumination_type: {illumination_type}")
 

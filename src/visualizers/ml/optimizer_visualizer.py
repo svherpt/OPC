@@ -68,12 +68,12 @@ def show_optimization_results(target_resist, optimized_mask, optimized_illum, mo
     axes[0, 3].axis('off')
     plt.colorbar(im3, ax=axes[0, 3], fraction=0.046)
     
-    im4 = axes[1, 0].imshow(nn_intensity, cmap='gray', vmin=0, vmax=max_intensity)
+    im4 = axes[1, 0].imshow(nn_intensity, cmap='magma', vmin=0, vmax=max_intensity)
     axes[1, 0].set_title('NN Wafer Intensity', fontsize=14, weight='bold')
     axes[1, 0].axis('off')
     plt.colorbar(im4, ax=axes[1, 0], fraction=0.046)
     
-    im5 = axes[1, 1].imshow(litho_intensity, cmap='gray', vmin=0, vmax=max_intensity)
+    im5 = axes[1, 1].imshow(litho_intensity, cmap='magma', vmin=0, vmax=max_intensity)
     axes[1, 1].set_title('Lithosim Wafer Intensity', fontsize=14, weight='bold')
     axes[1, 1].axis('off')
     plt.colorbar(im5, ax=axes[1, 1], fraction=0.046)
@@ -91,7 +91,9 @@ def show_optimization_results(target_resist, optimized_mask, optimized_illum, mo
     plt.colorbar(im7, ax=axes[1, 3], fraction=0.046)
     
     plt.tight_layout()
-    plt.show()
+
+    #save figure
+    plt.savefig('results/optimised_results.png', dpi=150)
     
     if create_animation and history is not None:
         create_optimization_animation(target_resist, history, model, litho_sim, sim_config, output_path='results/' + gif_path, fps=fps, figsize=figsize, device=device)
@@ -130,7 +132,7 @@ def create_optimization_animation(target_resist, history, model, litho_sim, sim_
     plt.colorbar(im0, ax=axes[0, 0], fraction=0.046)
     
     im1 = axes[0, 1].imshow(baseline_resist, cmap='gray', vmin=0, vmax=1)
-    axes[0, 1].set_title('Baseline (Target + Conv. Light)', fontsize=14, weight='bold')
+    axes[0, 1].set_title('Baseline (Target + Quad. Light)', fontsize=14, weight='bold')
     axes[0, 1].axis('off')
     plt.colorbar(im1, ax=axes[0, 1], fraction=0.046)
     
@@ -144,12 +146,12 @@ def create_optimization_animation(target_resist, history, model, litho_sim, sim_
     axes[0, 3].axis('off')
     plt.colorbar(im3, ax=axes[0, 3], fraction=0.046)
     
-    im4 = axes[1, 0].imshow(nn_intensities[0], cmap='gray', vmin=0, vmax=max_intensity)
+    im4 = axes[1, 0].imshow(nn_intensities[0], cmap='magma', vmin=0, vmax=max_intensity)
     axes[1, 0].set_title('NN Wafer Intensity', fontsize=14, weight='bold')
     axes[1, 0].axis('off')
     plt.colorbar(im4, ax=axes[1, 0], fraction=0.046)
     
-    im5 = axes[1, 1].imshow(litho_intensities[0], cmap='gray', vmin=0, vmax=max_intensity)
+    im5 = axes[1, 1].imshow(litho_intensities[0], cmap='magma', vmin=0, vmax=max_intensity)
     axes[1, 1].set_title('Lithosim Wafer Intensity', fontsize=14, weight='bold')
     axes[1, 1].axis('off')
     plt.colorbar(im5, ax=axes[1, 1], fraction=0.046)

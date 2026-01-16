@@ -3,10 +3,11 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import src.core.simulator.masks as masks
+import src.core.simulator.light_sources as light_sources
 
 FIELD_CONFIG = {
     "illumination": {
-        "cmap": "viridis",
+        "cmap": "hot",
         "xlabel": "X position (nm)",
         "ylabel": "Y position (nm)",
         "cbar": "Intensity",
@@ -22,7 +23,7 @@ FIELD_CONFIG = {
         "black_bg": False,
     },
     "wafer_intensity": {
-        "cmap": "hot",
+        "cmap": "magma",
         "xlabel": "X position (nm)",
         "ylabel": "Y position (nm)",
         "cbar": "Intensity",
@@ -72,7 +73,9 @@ def visualize_simulation_results(sim_results, mask=None, illumination=None, conf
     fields_to_plot = []
 
     if illumination is not None:
-        fields_to_plot.append(("illumination", illumination))
+        illumination = light_sources.quadrant_to_full(illumination)
+        upsampled_illumination = light_sources.upsample_illumination(illumination, target_size=mask_size)
+        fields_to_plot.append(("illumination", upsampled_illumination))
     if mask is not None:
         fields_to_plot.append(("mask", mask))
     fields_to_plot.append(("wafer_intensity", sim_results["wafer_intensity"]))

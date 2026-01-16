@@ -36,6 +36,18 @@ class SourceMaskOptimizer:
         x = F.conv2d(x, kernel_y, padding=(kernel_size // 2, 0))
         return x
 
+    def total_variation_loss(self, x):
+        """
+        Compute Total Variation loss to penalize spatial noise.
+        Encourages smoothness by penalizing differences between adjacent pixels.
+        """
+        # Horizontal differences
+        tv_h = torch.abs(x[:, :, :, 1:] - x[:, :, :, :-1])
+        # Vertical differences
+        tv_v = torch.abs(x[:, :, 1:, :] - x[:, :, :-1, :])
+        
+        return torch.mean(tv_h) + torch.mean(tv_v)
+
     def compute_schedules(self, i, num_iterations, initial_blur, final_blur, in_binary_phase, binary_iterations):
         # Compute blur annealing and temperature schedule
         if not in_binary_phase:
@@ -49,16 +61,25 @@ class SourceMaskOptimizer:
             
         return blur_sigma, temperature
 
-    def compute_loss_continuous(self, pred_intensity, pred_resist, target, temperature, coverage_weight=0.05):
+    def compute_loss_continuous(self, pred_intensity, pred_resist, target, mask, temperature, 
+                                coverage_weight=0.05, tv_weight=0.01):
         # Temperature-weighted loss: intensity -> resist over time
         intensity_loss = F.mse_loss(pred_intensity, target)
         resist_loss = F.mse_loss(pred_resist, target)
         main_loss = (1 - temperature) * intensity_loss + temperature * resist_loss
+        
+        # Coverage loss: ensure total intensity matches target
         coverage_loss = (pred_resist.mean() - target.mean()) ** 2
         
-        return main_loss + coverage_weight * coverage_loss, intensity_loss, resist_loss
+        # Total Variation loss: penalize spatial noise
+        tv_loss = self.total_variation_loss(mask)
+        
+        total_loss = main_loss + coverage_weight * coverage_loss + tv_weight * tv_loss
+        
+        return total_loss, intensity_loss, resist_loss, tv_loss
 
-    def compute_loss_binary(self, mask, pred_resist, target, i, num_iterations, binary_iterations, coverage_weight=0.05, binary_weight_max=0.1):
+    def compute_loss_binary(self, mask, pred_resist, target, i, num_iterations, binary_iterations, 
+                           coverage_weight=0.05, binary_weight_max=0.1, tv_weight=0.005):
         # Binary phase: push mask values toward 0 or 1
         resist_loss = F.mse_loss(pred_resist, target)
         binary_penalty = torch.mean(4 * mask * (1 - mask))
@@ -67,10 +88,16 @@ class SourceMaskOptimizer:
         binary_weight = binary_weight_max * (binary_progress ** 2)
         coverage_loss = (pred_resist.mean() - target.mean()) ** 2
         
-        return resist_loss + coverage_weight * coverage_loss + binary_weight * binary_penalty, resist_loss, binary_penalty
+        # Still apply TV loss in binary phase but with reduced weight
+        tv_loss = self.total_variation_loss(mask)
+        
+        total_loss = resist_loss + coverage_weight * coverage_loss + binary_weight * binary_penalty + tv_weight * tv_loss
+        
+        return total_loss, resist_loss, binary_penalty, tv_loss
 
     def optimize(self, target_resist, illumination_shape, num_iterations=2000, lr_mask=0.15, lr_illum=0.1, 
-                 initial_blur_mask=8.0, final_blur_mask=0.5, blur_illum=1.0, binarize_final=False, binary_iterations=300):
+                 initial_blur_mask=8.0, final_blur_mask=0.5, blur_illum=1.0, binarize_final=False, 
+                 binary_iterations=300, tv_weight=0.01, tv_weight_binary=0.005):
         
         target = torch.from_numpy(target_resist.astype(np.float32)).to(self.device)
         target = target.unsqueeze(0).unsqueeze(0)
@@ -92,6 +119,7 @@ class SourceMaskOptimizer:
             "intensity_loss": [],
             "resist_loss": [],
             "binary_penalty": [],
+            "tv_loss": [],
             "temperature": [],
             "mask_snapshots": [],
             "illum_snapshots": []
@@ -118,11 +146,15 @@ class SourceMaskOptimizer:
 
             if not in_binary_phase:
                 # Phase 1: Temperature annealing from intensity to resist
-                loss, intensity_loss, resist_loss = self.compute_loss_continuous(pred_intensity, pred_resist, target, temperature)
+                loss, intensity_loss, resist_loss, tv_loss = self.compute_loss_continuous(
+                    pred_intensity, pred_resist, target, mask, temperature, tv_weight=tv_weight
+                )
                 binary_penalty_val = 0.0
             else:
                 # Phase 2: Push toward binary values
-                loss, resist_loss, binary_penalty = self.compute_loss_binary(mask, pred_resist, target, i, num_iterations, binary_iterations)
+                loss, resist_loss, binary_penalty, tv_loss = self.compute_loss_binary(
+                    mask, pred_resist, target, i, num_iterations, binary_iterations, tv_weight=tv_weight_binary
+                )
                 intensity_loss = torch.tensor(0.0)
                 binary_penalty_val = binary_penalty.item()
 
@@ -136,6 +168,7 @@ class SourceMaskOptimizer:
                 history["intensity_loss"].append(intensity_loss.item() if not in_binary_phase else 0.0)
                 history["resist_loss"].append(resist_loss.item())
                 history["binary_penalty"].append(binary_penalty_val)
+                history["tv_loss"].append(tv_loss.item())
                 history["temperature"].append(temperature)
 
                 if i % 10 == 0:
@@ -144,7 +177,13 @@ class SourceMaskOptimizer:
 
             if i % 20 == 0:
                 phase = "BINARY" if in_binary_phase else "CONT"
-                postfix = {"phase": phase, "loss": f"{loss.item():.6f}", "temp": f"{temperature:.2f}", "blur_m": f"{blur_sigma_mask:.2f}"}
+                postfix = {
+                    "phase": phase, 
+                    "loss": f"{loss.item():.6f}", 
+                    "temp": f"{temperature:.2f}", 
+                    "blur_m": f"{blur_sigma_mask:.2f}",
+                    "tv": f"{tv_loss.item():.4f}"
+                }
                 if in_binary_phase:
                     postfix["bin_pen"] = f"{binary_penalty_val:.4f}"
                 pbar.set_postfix(postfix)

@@ -529,5 +529,5 @@ if __name__ == "__main__":
 
     # generate_n_augmentations(num_masks=10, num_illuminations=10, augmentations_per_mask=5,output_dir='test', sim_config=sim_config)
 
-    for i in tqdm(range(5000), desc="Generating batches"):
+    for i in tqdm(range(10000), desc="Generating batches"):
         generate_n_augmentations(num_masks=2, num_illuminations=1, augmentations_per_mask=5, output_dir='augmented_massive', sim_config=sim_config)

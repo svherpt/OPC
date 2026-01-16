@@ -233,17 +233,79 @@ class Trainer:
         
         return metrics
 
+    def save_checkpoint(self, path, epoch, best_loss, patience_counter):
+        """Save complete training state for resuming"""
+        checkpoint = {
+            'epoch': epoch,
+            'model_state_dict': self.model.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'scheduler_state_dict': self.scheduler.state_dict(),
+            'best_loss': best_loss,
+            'patience_counter': patience_counter,
+            'history': self.history,
+            'random_state': random.getstate(),
+            'np_random_state': np.random.get_state(),
+            'torch_random_state': torch.get_rng_state(),
+            'cuda_random_state': torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None
+        }
+        torch.save(checkpoint, path)
+        print(f"  ✓ Saved full checkpoint to {path}")
+
+    def load_checkpoint(self, path):
+        """Load complete training state for resuming"""
+        print(f"\nLoading checkpoint from {path}")
+        checkpoint = torch.load(path, map_location=self.device)
+        
+        self.model.load_state_dict(checkpoint['model_state_dict'])
+        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        self.history = checkpoint['history']
+        
+        # Restore random states for reproducibility
+        random.setstate(checkpoint['random_state'])
+        np.random.set_state(checkpoint['np_random_state'])
+        torch.set_rng_state(checkpoint['torch_random_state'])
+        if checkpoint['cuda_random_state'] is not None and torch.cuda.is_available():
+            torch.cuda.set_rng_state_all(checkpoint['cuda_random_state'])
+        
+        start_epoch = checkpoint['epoch'] + 1
+        best_loss = checkpoint['best_loss']
+        patience_counter = checkpoint['patience_counter']
+        
+        print(f"Resuming from epoch {start_epoch}")
+        print(f"Best loss so far: {best_loss:.6f}")
+        print(f"Patience counter: {patience_counter}")
+        
+        return start_epoch, best_loss, patience_counter
+
     def train(self, epochs=50, save_name='best_model.pth', patience=15, 
-              viz_every=1, n_viz_samples=6):
-        print(f"\nTraining for {epochs} epochs...")
+              viz_every=1, n_viz_samples=6, resume_from=None):
+        """
+        Train the model.
+        
+        Args:
+            epochs: Total number of epochs to train (not additional epochs when resuming)
+            save_name: Name for the best model checkpoint
+            patience: Early stopping patience
+            viz_every: Frequency of visualization generation
+            n_viz_samples: Number of samples to visualize
+            resume_from: Path to checkpoint to resume from (optional)
+        """
+        start_epoch = 0
         best_loss = float('inf')
         patience_counter = 0
+        
+        # Load checkpoint if resuming
+        if resume_from is not None:
+            start_epoch, best_loss, patience_counter = self.load_checkpoint(resume_from)
+        
+        print(f"\nTraining from epoch {start_epoch+1} to {epochs}...")
         
         # Create visualization directory
         viz_dir = self.save_dir / 'visualizations'
         viz_dir.mkdir(exist_ok=True, parents=True)
 
-        for epoch in range(epochs):
+        for epoch in range(start_epoch, epochs):
             train_loss, grad_norm, train_int_stats, train_res_stats = self.train_epoch()
             metrics = self.evaluate()
             test_loss = metrics['loss']
@@ -281,11 +343,18 @@ class Trainer:
 
             self.scheduler.step(test_loss)
 
+            # Always save checkpoint for current epoch (for exact reproducibility)
+            self.save_checkpoint(
+                self.save_dir / f'checkpoint_epoch_{epoch+1}.pth',
+                epoch, best_loss, patience_counter
+            )
+            
             if test_loss < best_loss:
                 best_loss = test_loss
                 patience_counter = 0
+                # Save best model weights separately
                 torch.save(self.model.state_dict(), self.save_dir / save_name)
-                print(f"  ✓ Saved checkpoint")
+                print(f"  ✓ New best model saved")
             else:
                 patience_counter += 1
                 if patience_counter >= patience:
@@ -317,8 +386,9 @@ class Trainer:
         print(f"\nTraining complete! Best test loss: {best_loss:.6f}")
 
     def load(self, path):
+        """Load only model weights (for inference)"""
         self.model.load_state_dict(torch.load(path))
-        print(f"Loaded {path}")
+        print(f"Loaded model weights from {path}")
 
 
 if __name__ == "__main__":
@@ -339,18 +409,17 @@ if __name__ == "__main__":
 
     model = LithographyUNet(base_ch=64)
     w_resist = 1.0
-    w_intensity = 3.0  # Increase intensity weight since targets are smaller scale
+    w_intensity = 3.0
     edge_weight = 2.0
 
     criterion = MultiHeadLoss(w_resist=w_resist, w_intensity=w_intensity, edge_weight=edge_weight)
     
-    batch_size = 16
+    batch_size = 64
     num_workers = 4
     lr = 1e-4
     device = 'cuda'
     save_dir = './checkpoints'
-    epochs = 50
-
+    
     trainer = Trainer(
         model=model,
         criterion=criterion,
@@ -363,7 +432,26 @@ if __name__ == "__main__":
         save_dir=save_dir
     )
 
-    trainer.train(epochs=epochs, save_name='best_model.pth', viz_every=1, n_viz_samples=6)
+    # OPTION 1: Train for 100 epochs all at once
+    trainer.train(epochs=100, save_name='best_model.pth', viz_every=1, n_viz_samples=6)
+    
+    # OPTION 2: Train in two stages (50 + 50)
+    # Stage 1: First 50 epochs
+    # print("\n" + "="*60)
+    # print("STAGE 1: Training for first 50 epochs")
+    # print("="*60)
+    # trainer.train(epochs=50, save_name='best_model.pth', viz_every=1, n_viz_samples=6)
+    
+    # print("\n" + "="*60)
+    # print("STAGE 2: Resuming and training to 100 epochs")
+    # print("="*60)
+    # trainer.train(
+    #     epochs=100, 
+    #     save_name='best_model.pth', 
+    #     viz_every=1, 
+    #     n_viz_samples=6,
+    #     resume_from='./checkpoints/checkpoint_epoch_50.pth'  # Adjust to actual checkpoint name
+    # )
     
     # Final visualizations
     print("\nGenerating final visualizations...")

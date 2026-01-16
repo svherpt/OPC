@@ -28,18 +28,7 @@ def main():
     dir_path = 'augmented_medium'
     dir_path = 'augmented_massive'
     
-    litho_sim = simulator.LithographySimulator(sim_config)
-    source_illumination = light_sources.create_quadrant_source(sim_config)  # shape: (Npupil, Npupil)
-
-    random_mask = masks.read_mask_from_img('ganopc-data/artitgt/82.glp.png', **sim_config)
-
-    # t0 = time.time()
-    simResults = litho_sim.simulate(random_mask, source_illumination)
-    # t1 = time.time()
-
-    # print(f"Simulation time: {t1 - t0:.2f} seconds")
-    simulation_visualizer.visualize_simulation_results(simResults, mask=random_mask, illumination=source_illumination, config=sim_config)  
-    
+    # simulate()
     
     # random_masks = masks.get_dataset_masks('./data/ganopc-data/artitgt', 1, **sim_config)
     # test_ML_model(sim_config, random_masks)
@@ -49,10 +38,23 @@ def main():
     #train_model('./augmented_massive', target_type='resists')
 
     # test_ML_model()
-    #optimize_model_multihead()
+    optimize_model_multihead()
 
     # visualize_dataloader_sample('./data/augmented_massive', split="train", batch_size=1, index_in_batch=0)
 
+def simulate():
+    litho_sim = simulator.LithographySimulator(sim_config)
+    source_illumination = light_sources.create_quadrant_source(sim_config)  # shape: (Npupil, Npupil)
+
+    random_mask = masks.read_mask_from_img('ganopc-data/artitgt/343.glp.png', **sim_config)
+
+    # t0 = time.time()
+    simResults = litho_sim.simulate(random_mask, source_illumination)
+    # t1 = time.time()
+
+    # print(f"Simulation time: {t1 - t0:.2f} seconds")
+    simulation_visualizer.visualize_simulation_results(simResults, mask=random_mask, illumination=source_illumination, config=sim_config)  
+    
 
 def test_ML_model():
     model = LithographyUNet(base_ch=64)
@@ -118,7 +120,7 @@ def optimize_model_multihead():
 
     # target_resist = masks.read_mask_from_img('ganopc-data/artitgt/10605.glp.png', mask_grid_size=256)
     # target_resist = masks.read_mask_from_img('ganopc-data/artitgt/572.glp.png', mask_grid_size=256)
-    target_resist = masks.read_mask_from_img('ganopc-data/artitgt/82.glp.png', mask_grid_size=256)
+    target_resist = masks.read_mask_from_img('ganopc-data/artitgt/343.glp.png', mask_grid_size=256)
 
 
 
@@ -126,7 +128,7 @@ def optimize_model_multihead():
     optimized_mask, optimized_illum, history = opt.optimize(
         target_resist=target_resist,
         illumination_shape=(32, 32),  # Shape of illumination quadrant
-        num_iterations=9500,
+        num_iterations=4500,
         lr_mask=0.2,                  # Learning rate for mask
         lr_illum=0.1,                 # Learning rate for illumination
         initial_blur_mask=10.0,       # Start with heavy blur (coarse)
