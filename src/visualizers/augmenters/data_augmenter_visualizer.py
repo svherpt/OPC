@@ -2,8 +2,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import json
 import src.core.simulator.masks as masks
-import src.core.simulator.light_sources as light_sources
-from src.core.ml.data_augmenter import LightSourceAugmenter, MaskAugmenter
+import src.core.simulator.illuminator as illuminator
+from src.core.augmenters.mask_augmenter import MaskAugmenter
+from src.core.augmenters.illumination_augmenter import IlluminationAugmenter
 
 
 def visualize_mask_augmentations(augmenter, mask):
@@ -59,8 +60,8 @@ def visualize_illumination_augmentations(augmenter, sim_config, n_samples=20, n_
         )
         
         # Convert to full for visualization
-        illum_full = light_sources.quadrant_to_full(illum_quadrant)
-        # illum_full = light_sources.upsample_illumination(illum_full, target_size=256)
+        illum_full = illuminator.quadrant_to_full(illum_quadrant)
+        # illum_full = illumination.upsample_illumination(illum_full, target_size=256)
         
         ax.imshow(illum_full, extent=(-1, 1, -1, 1), origin='lower', cmap='hot')
         ax.set_title(f"Sample {idx}", fontsize=10)
@@ -82,7 +83,7 @@ if __name__ == "__main__":
         sim_config = json.load(f)
     
     # Visualize mask augmentations
-    # random_mask = masks.get_random_dataset_mask('ganopc-data/artitgt', **sim_config)
+    # random_mask = masks.get_random_dataset_mask('example_masks', **sim_config)
     # mask_augmenter = MaskAugmenter()
     # visualize_mask_augmentations(mask_augmenter, random_mask)
     

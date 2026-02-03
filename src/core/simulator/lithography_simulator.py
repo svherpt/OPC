@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import src.core.simulator.masks as masks
 import json
 import src.visualizers.simulator.simulation_visualizer as simulation_visualizer
-import src.core.simulator.light_sources as light_sources
+import src.core.simulator.illuminator as illuminator
 from scipy.special import expit
 from scipy.ndimage import gaussian_filter
 
@@ -19,7 +19,7 @@ class LithographySimulator:
 
     def simulate(self, mask, source_illum_quadrant):
         mask = torch.from_numpy(mask).to(self.device, dtype=torch.float32)
-        source_illumination = light_sources.quadrant_to_full(source_illum_quadrant)
+        source_illumination = illuminator.quadrant_to_full(source_illum_quadrant)
         source_illumination = torch.from_numpy(source_illumination).to(self.device, dtype=torch.float32)
         mask_size = mask.shape[0]
         pupil_size = source_illumination.shape[0]
@@ -139,11 +139,11 @@ if __name__ == "__main__":
     with open("sim_config.json", "r") as f:
         sim_config = json.load(f)
 
-    # Random mask example
-    random_mask = masks.read_mask_from_img('ganopc-data/artitgt/1.glp.png', **sim_config)
-    illumination = light_sources.get_full_illumination(sim_config)
-    masks.visualise_mask(random_mask)
-    simulator = LithographySimulatorGPU(sim_config, device='cuda')
-    out = simulator.simulate(random_mask, illumination)
+    # Random mask and illumination example
+    random_mask = masks.read_mask_from_img('example_masks/1.glp.png', **sim_config)
+    source_illumination = illuminator.create_quadrant_source(sim_config)
 
-    simulation_visualizer.visualize_simulation_results(out, mask=random_mask, illumination=illumination, config=sim_config)
+    simulator = LithographySimulator(sim_config)
+    out = simulator.simulate(random_mask, source_illumination)
+
+    simulation_visualizer.visualize_simulation_results(out, mask=random_mask, illumination=source_illumination, config=sim_config)

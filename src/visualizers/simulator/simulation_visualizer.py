@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import src.core.simulator.masks as masks
-import src.core.simulator.light_sources as light_sources
+import src.core.simulator.illuminator as illuminator
 
 FIELD_CONFIG = {
     "illumination": {
@@ -73,8 +73,8 @@ def visualize_simulation_results(sim_results, mask=None, illumination=None, conf
     fields_to_plot = []
 
     if illumination is not None:
-        illumination = light_sources.quadrant_to_full(illumination)
-        upsampled_illumination = light_sources.upsample_illumination(illumination, target_size=mask_size)
+        illumination = illuminator.quadrant_to_full(illumination)
+        upsampled_illumination = illuminator.upsample_illumination(illumination, target_size=mask_size)
         fields_to_plot.append(("illumination", upsampled_illumination))
     if mask is not None:
         fields_to_plot.append(("mask", mask))

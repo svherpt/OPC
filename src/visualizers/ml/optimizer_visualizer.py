@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, FFMpegWriter
 import torch
-import src.core.simulator.light_sources as light_sources
+import src.core.simulator.illuminator as illuminator
 from tqdm import tqdm
 
 
@@ -26,14 +26,14 @@ def get_lithosim_prediction(litho_sim, mask, illumination):
 
 
 def get_conventional_baseline(litho_sim, target_resist, sim_config):
-    conventional_illum = light_sources.create_quadrant_source(sim_config)
+    conventional_illum = illuminator.create_quadrant_source(sim_config)
     _, baseline_resist = get_lithosim_prediction(litho_sim, target_resist, conventional_illum)
     return baseline_resist
 
 
 def getUpsampledIllumination(illum_quadrant, target_size):
-    full_illum = light_sources.quadrant_to_full(illum_quadrant)
-    upsampled_illum = light_sources.upsample_illumination(full_illum, target_size)
+    full_illum = illuminator.quadrant_to_full(illum_quadrant)
+    upsampled_illum = illuminator.upsample_illumination(full_illum, target_size)
     return upsampled_illum
 
 
