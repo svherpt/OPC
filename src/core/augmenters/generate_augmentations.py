@@ -59,48 +59,29 @@ def save_dataset(mask_illumination_simtriplets, output_dir, train_split=0.8):
             resist_img.save(split_dir / 'resists' / f"{file_id:06d}.png")
 
 
-def generate_n_augmentations(num_masks, num_illuminations, augmentations_per_mask, output_dir, sim_config):
+def generate_n_augmentations(num_masks, augmentations_per_mask, output_dir, sim_config):
     mask_augmenter = MaskAugmenter()
-    light_source_augmenter = IlluminationAugmenter()
+    illumination_augmenter = IlluminationAugmenter()
 
-    # Load base masks from dataset
     base_masks = masks.get_dataset_masks('example_masks', num_masks, **sim_config)
-    
-    # Augment each base mask
-    augmented_masks = []
+
+    triplets = []
     for mask in base_masks:
         for _ in range(augmentations_per_mask):
-            augmented_masks.append(mask_augmenter.random_augmentation(mask))
+            aug_mask = mask_augmenter.random_augmentation(mask)
+            illum_quadrant = illumination_augmenter.augment_illumination(**sim_config)
+            sim_results = simulator.LithographySimulator(sim_config).simulate(aug_mask, illum_quadrant)
+            triplets.append((aug_mask, illuminator.quadrant_to_full(illum_quadrant), sim_results))
 
-    # Generate illumination quadrants (32x32)
-    illumination_quadrants = [light_source_augmenter.augment_illumination(
-        quadrant_illum_grid_size=32,
-        numerical_aperture=sim_config["numerical_aperture"],
-        wavelength_nm=sim_config["wavelength_nm"]
-    ) for _ in range(num_illuminations)]
-
-    # Pair each mask with random illuminations
-    mask_illumination_pairs = []
-    for mask in augmented_masks:
-        selected_quadrants = random.sample(illumination_quadrants, num_illuminations)
-        for illum_quadrant in selected_quadrants:
-            # Simulator gets quadrant (32x32)
-            sim_results = simulator.LithographySimulator(sim_config).simulate(mask, illum_quadrant)
-            
-            # Save full (64x64) for visualization - will extract quadrant again when loading
-            illum_full = light_source_augmenter.quadrant_to_full(illum_quadrant)
-            
-            mask_illumination_pairs.append((mask, illum_full, sim_results))
-
-    save_dataset(mask_illumination_pairs, output_dir)
+    save_dataset(triplets, output_dir)
 
 def main():
     with open("sim_config.json", "r") as f:
             sim_config = json.load(f)
 
-    for i in tqdm(range(10), desc="Generating batches"):
-        generate_n_augmentations(num_masks=5, num_illuminations=1, 
-                                augmentations_per_mask=1, output_dir='augmented_medium', 
+    for i in tqdm(range(100), desc="Generating batches"):
+        generate_n_augmentations(num_masks=10, augmentations_per_mask=1, 
+                                output_dir='augmented_medium', 
                                 sim_config=sim_config)
 
 if __name__ == "__main__":

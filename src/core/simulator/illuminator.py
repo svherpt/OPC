@@ -4,6 +4,7 @@ from scipy.ndimage import zoom
 import json
 import os
 
+
 def create_quadrant_source(config):
     quadrant_illum_grid_size = config.get("quadrant_illum_grid_size", 64)
     numerical_aperture = config.get("numerical_aperture", 1.35)
@@ -46,6 +47,7 @@ def quadrant_to_full(quadrant_illumination):
     full_pupil = np.concatenate([top_half[::-1, :], top_half], axis=0)
     return full_pupil
 
+
 def read_illumination_quarter_from_file(file_path, **kwargs):
     # illumination_size = kwargs.get("quadrant_illum_grid_size", 32)
     illumination = plt.imread('./data/' + file_path)
@@ -54,6 +56,7 @@ def read_illumination_quarter_from_file(file_path, **kwargs):
     illumination = illumination[:illumination.shape[0]//2, :illumination.shape[1]//2]
 
     return illumination
+
 
 def read_random_illumination_quarter(dir_path="example_masks", **kwargs):
     all_files = [f for f in os.listdir('./data/' + dir_path) if f.endswith('.png')]
@@ -79,7 +82,6 @@ def visualise_illumination(illumination):
     plt.imshow(illumination, cmap='gray')
     plt.title("Generated Illumination")
     plt.show()
-
 
 
 if __name__ == "__main__":
