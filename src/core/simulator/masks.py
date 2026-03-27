@@ -4,25 +4,27 @@ from scipy.ndimage import zoom
 import os
 
 
-def get_random_dataset_mask(dir_path="ganopc-data/artitgt", **kwargs):
-    all_files = [f for f in os.listdir('./data/' + dir_path) if f.endswith('.png')]
+def get_random_dataset_mask(dir_path="example_masks", **kwargs):
+    """Reads a random mask from the specified directory and returns it as a numpy array."""
+    all_files = [f for f in os.listdir(os.path.join('./data/', dir_path)) if f.endswith('.png')]
     random_file = np.random.choice(all_files)
 
-    return read_mask_from_img(dir_path + "/" + random_file, **kwargs)
+    return read_mask_from_img(os.path.join(dir_path, random_file), **kwargs)
 
 
-def get_dataset_masks(dir_path="ganopc-data/artitgt", num_masks=5, **kwargs):
-    all_files = [f for f in os.listdir('./data/' + dir_path) if f.endswith('.png')]
-
+def get_dataset_masks(dir_path="example_masks", num_masks=5, **kwargs):
+    """Reads a specified number of random masks from the given directory and returns them as a list of numpy arrays."""
+    all_files = [f for f in os.listdir(os.path.join('./data/', dir_path)) if f.endswith('.png')]
     #Sample without replacement
     selected_files = np.random.choice(all_files, size=num_masks, replace=False)
 
-    return [read_mask_from_img(dir_path + "/" + file_path, **kwargs) for file_path in selected_files]
+    return [read_mask_from_img(os.path.join(dir_path, file_path), **kwargs) for file_path in selected_files]
 
 
 def read_mask_from_img(file_path, **kwargs):
+    """Reads a mask from an image file, converts it to binary, and resizes it to the desired grid size."""
     mask_size = kwargs.get("mask_grid_size", 512)
-    mask = plt.imread('./data/' + file_path)
+    mask = plt.imread(os.path.join('./data/', file_path))
 
     mask = (mask > 0.5).astype(np.float64)
 
@@ -40,13 +42,12 @@ def read_mask_from_img(file_path, **kwargs):
 
 
 def visualise_mask(mask):
-    plt.imshow(mask)
+    """Visualizes the given mask using a grayscale colormap."""
+    plt.imshow(mask, cmap='gray')
     plt.title("Generated Mask")
     plt.show()
 
 
 if __name__ == "__main__":
-    test_mask = read_mask_from_img("ganopc-data/artitgt/1.glp.png", mask_grid_size=256)
-    visualise_mask(test_mask)
-    test_mask = read_mask_from_img("augmented_small/train/inputs/000000.png", mask_grid_size=256)
+    test_mask = read_mask_from_img("example_masks/1.glp.png", mask_grid_size=256)
     visualise_mask(test_mask)

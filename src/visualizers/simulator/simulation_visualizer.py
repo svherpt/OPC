@@ -2,8 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-import src.core.simulator.masks as masks
-import src.core.simulator.light_sources as light_sources
+import src.core.simulator.illuminator as illuminator
 
 FIELD_CONFIG = {
     "illumination": {
@@ -42,6 +41,7 @@ FIELD_CONFIG = {
 
 
 def _plot_field(ax, data, cfg, title, extent):
+    """Helper function to plot a single field with the specified configuration."""
     if cfg["log"]:
         valid = data[np.isfinite(data) & (data > 0)]
         norm = LogNorm(vmin=valid.min(), vmax=valid.max()) if valid.size else None
@@ -63,6 +63,7 @@ def _plot_field(ax, data, cfg, title, extent):
 
 
 def visualize_simulation_results(sim_results, mask=None, illumination=None, config=None):
+    """Visualizes the results of a lithography simulation, including mask, illumination, wafer intensity, and resist profile."""
     mask_size = config.get("mask_grid_size", 512) if config else sim_results["wafer_intensity"].shape[0]
 
     print(f"Visualizing simulation results with mask size: {mask.shape if mask is not None else 'N/A'} and illumination size: {illumination.shape if illumination is not None else 'N/A'}")
@@ -73,16 +74,19 @@ def visualize_simulation_results(sim_results, mask=None, illumination=None, conf
     fields_to_plot = []
 
     if illumination is not None:
-        illumination = light_sources.quadrant_to_full(illumination)
-        upsampled_illumination = light_sources.upsample_illumination(illumination, target_size=mask_size)
+        illumination = illuminator.quadrant_to_full(illumination)
+        upsampled_illumination = illuminator.upsample_illumination(illumination, target_size=mask_size)
         fields_to_plot.append(("illumination", upsampled_illumination))
+
     if mask is not None:
         fields_to_plot.append(("mask", mask))
+
     fields_to_plot.append(("wafer_intensity", sim_results["wafer_intensity"]))
     fields_to_plot.append(("resist_profile", sim_results["resist_profile"]))
 
     ncols = len(fields_to_plot)
-    fig, axes = plt.subplots(1, ncols, figsize=(5*ncols, 5))
+    figSizeFactor = 4.5
+    _, axes = plt.subplots(1, ncols, figsize=(figSizeFactor*ncols, figSizeFactor))
 
     if ncols == 1:
         axes = [axes]
