@@ -1,17 +1,45 @@
 import numpy as np
-import json
-import random
 from pathlib import Path
 from PIL import Image
+from tqdm import tqdm
+
 from src.core.augmenters.mask_augmenter import MaskAugmenter
 from src.core.augmenters.illumination_augmenter import IlluminationAugmenter
-from tqdm import tqdm
 import src.core.simulator.masks as masks
 import src.core.simulator.lithography_simulator as simulator
 import src.core.simulator.illuminator as illuminator
+import src.core.misc as misc
 
-def save_dataset(mask_illumination_simtriplets, output_dir, train_split=0.8):
-    output_dir = Path("./data/" + output_dir)
+
+def generate_triplets(base_masks, mask_variants_per_mask, illum_per_mask, sim_config):
+    """Generate a list of (aug_mask, full_illumination, sim_results) triplets."""
+    mask_augmenter = MaskAugmenter()
+    illumination_augmenter = IlluminationAugmenter()
+    sim = simulator.LithographySimulator(sim_config)
+
+    triplets = []
+
+    for mask in base_masks:
+        # Generate mask variants
+        mask_variants = [mask_augmenter.random_augmentation(mask) for _ in range(mask_variants_per_mask)]
+
+        for aug_mask in mask_variants:
+            for _ in range(illum_per_mask):
+                # Generate illumination quadrant and normalize
+                illum_quadrant = illumination_augmenter.augment_illumination(**sim_config)
+                illum_quadrant /= (illum_quadrant.sum() + 1e-8)
+
+                sim_results = sim.simulate(aug_mask, illum_quadrant)
+                full_illum = illuminator.quadrant_to_full(illum_quadrant)
+
+                triplets.append((aug_mask, full_illum, sim_results))
+
+    return triplets
+
+
+def save_triplets(triplets, output_dir, train_split=0.8):
+    """Save a list of (mask, illumination, sim_results) triplets into structured train/test folders."""
+    output_dir = Path("./data") / output_dir
     splits = ['train', 'test']
     subdirs = ['masks', 'illuminations', 'intensities', 'resists']
 
@@ -19,7 +47,7 @@ def save_dataset(mask_illumination_simtriplets, output_dir, train_split=0.8):
         for subdir in subdirs:
             (output_dir / split / subdir).mkdir(parents=True, exist_ok=True)
 
-    n_total = len(mask_illumination_simtriplets)
+    n_total = len(triplets)
     n_train = int(n_total * train_split)
     indices = np.arange(n_total)
     np.random.shuffle(indices)
@@ -28,61 +56,40 @@ def save_dataset(mask_illumination_simtriplets, output_dir, train_split=0.8):
         'test': indices[n_train:]
     }
 
-    for split_name, split_idx in split_indices.items():
+    for split_name, idxs in split_indices.items():
         split_dir = output_dir / split_name
 
-        # Get num files already in masks to continue numbering
+        # Get current count to continue numbering
         existing_files = list((split_dir / 'masks').glob('*.png'))
         start_id = len(existing_files)
 
-        for idx, data_idx in enumerate(split_idx):
-            mask, illumination, sim_results = mask_illumination_simtriplets[data_idx]
+        for i, data_idx in enumerate(idxs):
+            mask, illumination, sim_results = triplets[data_idx]
+            file_id = start_id + i
 
-            file_id = start_id + idx
-
-            # Save input mask
-            mask_img = Image.fromarray((mask * 255).astype(np.uint8))
-            mask_img.save(split_dir / 'masks' / f"{file_id:06d}.png")
-
+            # Save mask
+            Image.fromarray((mask * 255).astype(np.uint8)).save(split_dir / 'masks' / f"{file_id:06d}.png")
             # Save illumination
-            illum_img = Image.fromarray((illumination * 255).astype(np.uint8))
-            illum_img.save(split_dir / 'illuminations' / f"{file_id:06d}.png")
-
+            Image.fromarray((illumination * 255).astype(np.uint8)).save(split_dir / 'illuminations' / f"{file_id:06d}.png")
             # Save wafer intensity
-            wafer_intensity = sim_results["wafer_intensity"]
-            intensity_img = Image.fromarray((wafer_intensity * 255).astype(np.uint8))
-            intensity_img.save(split_dir / 'intensities' / f"{file_id:06d}.png")
-
+            Image.fromarray((sim_results["wafer_intensity"] * 255).astype(np.uint8)).save(split_dir / 'intensities' / f"{file_id:06d}.png")
             # Save resist profile
-            resist_profile = sim_results["resist_profile"]
-            resist_img = Image.fromarray((resist_profile * 255).astype(np.uint8))
-            resist_img.save(split_dir / 'resists' / f"{file_id:06d}.png")
+            Image.fromarray((sim_results["resist_profile"] * 255).astype(np.uint8)).save(split_dir / 'resists' / f"{file_id:06d}.png")
 
-
-def generate_n_augmentations(num_masks, augmentations_per_mask, output_dir, sim_config):
-    mask_augmenter = MaskAugmenter()
-    illumination_augmenter = IlluminationAugmenter()
-
-    base_masks = masks.get_dataset_masks('example_masks', num_masks, **sim_config)
-
-    triplets = []
-    for mask in base_masks:
-        for _ in range(augmentations_per_mask):
-            aug_mask = mask_augmenter.random_augmentation(mask)
-            illum_quadrant = illumination_augmenter.augment_illumination(**sim_config)
-            sim_results = simulator.LithographySimulator(sim_config).simulate(aug_mask, illum_quadrant)
-            triplets.append((aug_mask, illuminator.quadrant_to_full(illum_quadrant), sim_results))
-
-    save_dataset(triplets, output_dir)
 
 def main():
-    with open("sim_config.json", "r") as f:
-            sim_config = json.load(f)
+    sim_config = misc.get_simulation_config()
+    num_base_masks_total = 10
+    mask_variants_per_mask = 5
+    illum_per_mask = 5
+    output_dir = 'augmented_medium'
 
-    for i in tqdm(range(100), desc="Generating batches"):
-        generate_n_augmentations(num_masks=10, augmentations_per_mask=1, 
-                                output_dir='augmented_medium', 
-                                sim_config=sim_config)
+    # Load all base masks
+    base_masks = masks.get_dataset_masks('example_masks', num_base_masks_total, **sim_config)
 
-if __name__ == "__main__":
-    main()
+    batch_size = 20 
+    # Generate in batches, progress bar outside
+    for batch_start in tqdm(range(0, num_base_masks_total, batch_size), desc="Batches"):
+        batch_masks = base_masks[batch_start: batch_start + batch_size]
+        triplets = generate_triplets(batch_masks, mask_variants_per_mask, illum_per_mask, sim_config)
+        save_triplets(triplets, output_dir)
