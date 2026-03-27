@@ -12,6 +12,7 @@ class MaskAugmenter:
 
         # (Weight, Function) pairs for augmentation operations
         self._operation_registry = [
+            (2, lambda m: self.add_random_squares(m, num_squares=np.random.randint(10, 25), max_size=np.random.randint(5, 25))),
             (1, lambda m: self.dilate_uniform(m, size=np.random.randint(1, 5))),
             (1, lambda m: self.erode_uniform(m, size=np.random.randint(5))),
             (2, lambda m: self.add_corner_rounding(m, radius=np.random.randint(3, 10))),
@@ -26,6 +27,31 @@ class MaskAugmenter:
             fn for weight, fn in self._operation_registry for _ in range(weight)
         ]
     
+
+    def add_random_squares(self, mask, num_squares=5, max_size=10):
+        result = mask.copy().astype(float)
+        offsetFactor = 5
+        
+        # Find existing mask pixels
+        mask_coords = np.where(mask > 0)
+        if len(mask_coords[0]) == 0:
+            return result.astype(mask.dtype)
+        
+        for _ in range(num_squares):
+            size = np.random.randint(1, max_size)
+            # Pick a random pixel from the existing mask
+            idx = np.random.randint(0, len(mask_coords[0]))
+            center_y, center_x = mask_coords[0][idx], mask_coords[1][idx]
+            
+            # Place square near that pixel (within 2*size distance)
+            offset = np.random.randint(-offsetFactor*size, offsetFactor*size, size=2)
+            y = np.clip(center_y + offset[0], 0, mask.shape[0] - size)
+            x = np.clip(center_x + offset[1], 0, mask.shape[1] - size)
+            
+            # Create and add the square to the result
+            result[y:y+size, x:x+size] = 1
+        
+        return result.astype(mask.dtype)
 
     def dilate_uniform(self, mask, size=3):
         structure = morphology.disk(size)

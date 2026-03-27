@@ -39,8 +39,9 @@ def visualize_mask_augmentations(augmenter, mask):
 
 def visualize_random_mask_augmentations(augmenter, mask, n_samples=16):
     n_cols = 4
+    col_scale = 2.5
     n_rows = int(np.ceil(n_samples / n_cols))
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(3*n_cols, 3*n_rows))
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(col_scale*n_cols, col_scale*n_rows))
     axes = np.atleast_2d(axes).reshape(n_rows, n_cols)
 
     augmented, _ = augmenter.batch_augment([mask], augmentations_per_mask=n_samples)
@@ -146,10 +147,10 @@ if __name__ == "__main__":
         sim_config = json.load(f)
 
     # Visualize mask augmentations
-    # while(True):
-    #     random_mask = masks.get_random_dataset_mask('example_masks', **sim_config)
-    #     mask_augmenter = MaskAugmenter()
-    #     visualize_random_mask_augmentations(mask_augmenter, random_mask)
+    while(True):
+        random_mask = masks.get_random_dataset_mask('example_masks', **sim_config)
+        mask_augmenter = MaskAugmenter()
+        visualize_random_mask_augmentations(mask_augmenter, random_mask)
 
     # Visualize illumination augmentations
     # while(True):

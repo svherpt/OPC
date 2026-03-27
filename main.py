@@ -15,7 +15,6 @@ import matplotlib.pyplot as plt
 import src.core.ml.trainer as trainer
 from torch.utils.data import DataLoader
 import src.visualizers.ml.trainer_visualizer as trainer_visualizer
-import src.core.data.data_augmenter as data_augmenter
 
 
 with open("sim_config.json", "r") as f:

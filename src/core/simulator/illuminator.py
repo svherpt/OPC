@@ -5,6 +5,7 @@ import json
 import os
 
 
+# Generate some simple quadrant-based source illumination patterns 
 def create_quadrant_source(config):
     quadrant_illum_grid_size = config.get("quadrant_illum_grid_size", 64)
     numerical_aperture = config.get("numerical_aperture", 1.35)
@@ -49,7 +50,6 @@ def quadrant_to_full(quadrant_illumination):
 
 
 def read_illumination_quarter_from_file(file_path, **kwargs):
-    # illumination_size = kwargs.get("quadrant_illum_grid_size", 32)
     illumination = plt.imread('./data/' + file_path)
 
     #Return just a single quadrant
@@ -79,7 +79,7 @@ def upsample_illumination(lowres_illumination, target_size):
 
 
 def visualise_illumination(illumination):
-    plt.imshow(illumination, cmap='gray')
+    plt.imshow(illumination, cmap='hot')
     plt.title("Generated Illumination")
     plt.show()
 

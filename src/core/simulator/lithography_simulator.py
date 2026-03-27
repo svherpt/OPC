@@ -15,12 +15,14 @@ class LithographySimulator:
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.chunk_size = chunk_size
 
-        # print(f"LithographySimulatorGPU initialized on device: {self.device}")
+        print(f"LithographySimulator initialized on device: {self.device}")
 
     def simulate(self, mask, source_illum_quadrant):
         mask = torch.from_numpy(mask).to(self.device, dtype=torch.float32)
+
         source_illumination = illuminator.quadrant_to_full(source_illum_quadrant)
         source_illumination = torch.from_numpy(source_illumination).to(self.device, dtype=torch.float32)
+        
         mask_size = mask.shape[0]
         pupil_size = source_illumination.shape[0]
 
