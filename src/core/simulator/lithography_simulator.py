@@ -17,7 +17,7 @@ class LithographySimulator:
 
         self.cache_frequency_grids()
 
-        print(f"LithographySimulator initialized on device: {self.device}")
+        #print(f"LithographySimulator initialized on device: {self.device}")
 
 
     def cache_frequency_grids(self):
