@@ -1,15 +1,15 @@
 import torch 
 import numpy as np
-import matplotlib.pyplot as plt
 import src.core.simulator.masks as masks
-import json
 import src.visualizers.simulator.simulation_visualizer as simulation_visualizer
 import src.core.simulator.illuminator as illuminator
+import src.core.misc as misc
 from scipy.special import expit
 from scipy.ndimage import gaussian_filter
 
 
 class LithographySimulator:
+    """Simulates the lithography process given a mask and a quadrant of the source illumination."""
     def __init__(self, config, chunk_size=128):
         self.config = config
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -18,11 +18,12 @@ class LithographySimulator:
         print(f"LithographySimulator initialized on device: {self.device}")
 
     def simulate(self, mask, source_illum_quadrant):
+        """Performs the lithography simulation using the Fourier optics model."""
         mask = torch.from_numpy(mask).to(self.device, dtype=torch.float32)
 
         source_illumination = illuminator.quadrant_to_full(source_illum_quadrant)
         source_illumination = torch.from_numpy(source_illumination).to(self.device, dtype=torch.float32)
-        
+
         mask_size = mask.shape[0]
         pupil_size = source_illumination.shape[0]
 
@@ -60,8 +61,8 @@ class LithographySimulator:
 
             # Create filters for this chunk
             filters = torch.stack([
-                self.get_pupil_filter(freq_x - pupil_freq_x_grid[i,j], freq_y - pupil_freq_y_grid [i,j])
-                for i,j in chunk_indices
+                self.get_pupil_filter(freq_x - pupil_freq_x_grid[i, j], freq_y - pupil_freq_y_grid i, j])
+                for i,j in chunk_indices.tolist()
             ])  # shape: (chunk_size, mask_size, mask_size)
 
             # Multiply mask FFT by filters
@@ -97,6 +98,7 @@ class LithographySimulator:
         }
 
     def get_resist_profile(self, intensity):
+        """Converts normalized intensity to resist profile using a sigmoid function."""
         threshold = self.config.get("resist_threshold", 0.5)
         sigma = self.config.get("resist_blur_sigma", 1.0)
         eps = self.config.get("resist_eps", 1e-3)
@@ -114,6 +116,7 @@ class LithographySimulator:
         return resist_profile
 
     def get_pupil_filter(self, freq_x, freq_y):
+        """Computes the pupil filter with aperture cutoff and defocus phase."""
         wavelength_nm = self.config.get("wavelength_nm", 193)
         numerical_aperture = self.config.get("numerical_aperture", 1.35)
         defocus_nm = self.config.get("defocus_nm", 0.0)
@@ -129,6 +132,7 @@ class LithographySimulator:
         return pupil * torch.exp(1j * phase)
 
     def get_initial_grid(self):
+        """Creates the initial coordinate grid for the mask."""
         mask_grid_size = self.config.get("mask_grid_size", 512)
         mask_width_nm = self.config.get("mask_width_nm", 1000)
 
@@ -137,12 +141,10 @@ class LithographySimulator:
         return np.meshgrid(x, y)
 
 if __name__ == "__main__":
-
-    with open("sim_config.json", "r") as f:
-        sim_config = json.load(f)
+    sim_config = misc.get_simulation_config()
 
     # Random mask and illumination example
-    random_mask = masks.read_mask_from_img('example_masks/1.glp.png', **sim_config)
+    random_mask = masks.get_random_dataset_mask(**sim_config)
     source_illumination = illuminator.create_quadrant_source(sim_config)
 
     simulator = LithographySimulator(sim_config)
