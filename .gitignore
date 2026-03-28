@@ -11,6 +11,10 @@ venv/
 .vscode/
 
 
+#MacOS
+.DS_Store
+
+
 
 # Data (adjust if needed)
 data/
