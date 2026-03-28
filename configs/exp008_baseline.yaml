@@ -1,7 +1,7 @@
 data:
   data_dir: augmented_medium
   batch_size: 128
-  num_workers: 0
+  num_workers: 2
   max_samples: null  # null = use all, set to e.g. 2000 for quick runs
 
 model:
