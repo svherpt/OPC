@@ -66,14 +66,14 @@ def build_dataloaders(config):
         batch_size=data_cfg.get("batch_size", 16),
         shuffle=True,
         num_workers=data_cfg.get("num_workers", 2),
-        pin_memory=False,
+        pin_memory=True,
     )
     test_loader = DataLoader(
         test_dataset,
         batch_size=data_cfg.get("batch_size", 16),
         shuffle=False,
         num_workers=data_cfg.get("num_workers", 2),
-        pin_memory=False,
+        pin_memory=True,
     )
 
     return train_loader, test_loader
