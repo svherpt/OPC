@@ -1,0 +1,14 @@
+artifact_uri: file:///Users/simen/Documents/Github/OPC/mlruns/186548141224231327/1d5e35613cae486992db0f89e3ce7dd4/artifacts
+end_time: 1774685868347
+entry_point_name: ''
+experiment_id: '186548141224231327'
+lifecycle_stage: active
+run_id: 1d5e35613cae486992db0f89e3ce7dd4
+run_name: exp001_baseline
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1774684795674
+status: 4
+tags: []
+user_id: simen

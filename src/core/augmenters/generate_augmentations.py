@@ -34,7 +34,7 @@ def generate_triplets(base_masks, mask_variants_per_mask, illum_per_mask, sim_co
 
                 triplets.append((aug_mask, full_illum, sim_results))
 
-    return triplets 
+    return triplets
 
 
 def save_triplets(triplets, output_dir):
@@ -62,7 +62,7 @@ def save_triplets(triplets, output_dir):
 def main():
     sim_config = misc.get_simulation_config()
 
-    num_base_masks_total = 400
+    num_base_masks_total = 5*400
     batch_size = 4
 
     # Train: 5 variants × 5 illum = 25 per mask
@@ -70,8 +70,8 @@ def main():
     train_illum_per_mask = 5
 
     # Test: 1 variant × 5 illum = 5 per mask
-    test_mask_variants = 1
-    test_illum_per_mask = 5
+    test_mask_variants = 5
+    test_illum_per_mask = 1
 
     output_dir = 'augmented_medium'
 
@@ -82,18 +82,18 @@ def main():
     train_masks = base_masks[:split_idx]
     test_masks = base_masks[split_idx:]
 
-    print("\n=== Generating TRAIN dataset ===")
-    for batch_start in tqdm(range(0, len(train_masks), batch_size), desc="Train batches"):
-        batch_masks = train_masks[batch_start: batch_start + batch_size]
+    # print("\n=== Generating TRAIN dataset ===")
+    # for batch_start in tqdm(range(0, len(train_masks), batch_size), desc="Train batches"):
+    #     batch_masks = train_masks[batch_start: batch_start + batch_size]
 
-        triplets = generate_triplets(
-            batch_masks,
-            mask_variants_per_mask=train_mask_variants,
-            illum_per_mask=train_illum_per_mask,
-            sim_config=sim_config
-        )
+    #     triplets = generate_triplets(
+    #         batch_masks,
+    #         mask_variants_per_mask=train_mask_variants,
+    #         illum_per_mask=train_illum_per_mask,
+    #         sim_config=sim_config
+    #     )
 
-        save_triplets(triplets, output_dir + "/train")
+    #     save_triplets(triplets, output_dir + "/train")
 
     print("\n=== Generating TEST dataset ===")
     for batch_start in tqdm(range(0, len(test_masks), batch_size), desc="Test batches"):
