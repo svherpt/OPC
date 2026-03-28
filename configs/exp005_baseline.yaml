@@ -1,8 +1,8 @@
 data:
   data_dir: augmented_medium
-  batch_size: 32
+  batch_size: 128
   num_workers: 2
-  max_samples: 100  # null = use all, set to e.g. 2000 for quick runs
+  max_samples: null  # null = use all, set to e.g. 2000 for quick runs
 
 model:
   name: unet_film
