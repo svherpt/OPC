@@ -9,25 +9,40 @@ class LithographyDataset(Dataset):
     """Dataset of (mask, illumination quadrant, wafer intensity, resist) tuples loaded per sample from disk."""
 
     def __init__(self, data_dir, split="train", max_samples=None):
-        """Scan and validate PNG files under ./data/<data_dir>/<split>/{masks, illuminations, intensities, resists}."""
+        """Scan, validate and load all samples into RAM."""
         base = Path("./data") / data_dir / split
 
-        self.mask_paths      = sorted((base / "masks").glob("*.png"))
-        self.illum_paths     = sorted((base / "illuminations").glob("*.png"))
-        self.intensity_paths = sorted((base / "intensities").glob("*.png"))
-        self.resist_paths    = sorted((base / "resists").glob("*.png"))
+        mask_paths      = sorted((base / "masks").glob("*.png"))
+        illum_paths     = sorted((base / "illuminations").glob("*.png"))
+        intensity_paths = sorted((base / "intensities").glob("*.png"))
+        resist_paths    = sorted((base / "resists").glob("*.png"))
 
-        assert len(self.mask_paths) == len(self.illum_paths) == \
-               len(self.intensity_paths) == len(self.resist_paths), \
-               "Mismatch in number of files across subdirectories"
+        assert len(mask_paths) == len(illum_paths) == \
+            len(intensity_paths) == len(resist_paths), \
+            "Mismatch in number of files across subdirectories"
 
         if max_samples is not None:
-            self.mask_paths      = self.mask_paths[:max_samples]
-            self.illum_paths     = self.illum_paths[:max_samples]
-            self.intensity_paths = self.intensity_paths[:max_samples]
-            self.resist_paths    = self.resist_paths[:max_samples]
+            mask_paths      = mask_paths[:max_samples]
+            illum_paths     = illum_paths[:max_samples]
+            intensity_paths = intensity_paths[:max_samples]
+            resist_paths    = resist_paths[:max_samples]
 
-        print(f"Found {len(self.mask_paths)} samples ({split})")
+        print(f"Loading {len(mask_paths)} samples into RAM ({split})...")
+        self.masks       = torch.stack([self._load(p) for p in mask_paths])
+        self.intensities = torch.stack([self._load(p) for p in intensity_paths])
+        self.resists     = torch.stack([self._load(p) for p in resist_paths])
+
+        illums      = torch.stack([self._load(p) for p in illum_paths])
+        _, _, H, W  = illums.shape
+        self.illums = illums[:, :, H // 2:, W // 2:]  # slice quadrant once upfront
+
+        total_mb = sum(t.nbytes for t in [self.masks, self.intensities, self.resists, self.illums]) / 1024**2
+        print(f"Loaded {len(self.masks)} samples ({total_mb:.0f} MB) ({split})")
+
+
+    def __getitem__(self, idx):
+        """Return (mask, illum_q, intensity, resist) where illum_q is the bottom-right quadrant of the full illumination."""
+        return self.masks[idx], self.illums[idx], self.intensities[idx], self.resists[idx]
 
     def _load(self, path):
         """Load a grayscale PNG as a [1, H, W] float32 tensor normalised to [0, 1]."""
@@ -37,19 +52,9 @@ class LithographyDataset(Dataset):
 
     def __len__(self):
         """Return the number of samples in the dataset."""
-        return len(self.mask_paths)
+        return len(self.masks)
 
-    def __getitem__(self, idx):
-        """Return (mask, illum_q, intensity, resist) where illum_q is the bottom-right quadrant of the full illumination."""
-        mask      = self._load(self.mask_paths[idx])
-        intensity = self._load(self.intensity_paths[idx])
-        resist    = self._load(self.resist_paths[idx])
-
-        illum   = self._load(self.illum_paths[idx])
-        _, H, W = illum.shape
-        illum_q = illum[:, H // 2:, W // 2:]
-
-        return mask, illum_q, intensity, resist
+    
 
 
 def build_dataloaders(config):
@@ -65,15 +70,16 @@ def build_dataloaders(config):
         train_dataset,
         batch_size=data_cfg.get("batch_size", 16),
         shuffle=True,
-        num_workers=data_cfg.get("num_workers", 2),
-        pin_memory=True,
+        num_workers=0,
+        pin_memory=False,
     )
+
     test_loader = DataLoader(
         test_dataset,
         batch_size=data_cfg.get("batch_size", 16),
         shuffle=False,
-        num_workers=data_cfg.get("num_workers", 2),
-        pin_memory=True,
+        num_workers=0,
+        pin_memory=False,
     )
 
     return train_loader, test_loader
@@ -84,9 +90,8 @@ if __name__ == "__main__":
         "data": {
             "data_dir": "augmented_medium",
             "batch_size": 4,
-            "num_workers": 2,
+            "num_workers": 0,
             "max_samples": 400,
-
         }
     }
 
