@@ -83,6 +83,6 @@ if __name__ == "__main__":
     model = model.to(device)
 
     config  = checkpoint["config"]
-    dataset = LithographyDataset(config["data"]["data_dir"], split="train")
+    dataset = LithographyDataset(config["data"]["data_dir"], split="test")
 
     plot_predictions(model, dataset, device, n=6, save_dir="outputs", show=True)
