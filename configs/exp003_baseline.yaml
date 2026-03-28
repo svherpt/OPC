@@ -1,0 +1,19 @@
+data:
+  data_dir: augmented_medium
+  batch_size: 16
+  num_workers: 2
+  max_samples: 4000  # null = use all, set to e.g. 2000 for quick runs
+
+model:
+  name: unet_film
+  channels: 16
+  illum_dim: 128
+
+training:
+  epochs: 50
+  lr: 0.001
+  lambda_resist: 0.5
+
+mlflow:
+  experiment_name: opc_surrogate
+  run_name: exp001_baseline
