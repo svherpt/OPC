@@ -81,6 +81,13 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--batch_size",
+        type=int,
+        default=40,
+        help="Batch size to process masks in chunks"
+    )
+
+    parser.add_argument(
         "--output_dir",
         type=str,
         required=True,
@@ -96,7 +103,7 @@ def main():
     num_base_masks_total = args.num_base_masks
     output_dir = args.output_dir
 
-    batch_size = 40  # Hardcoded batch size to control RAM usage
+    batch_size = args.batch_size
 
     # Train/test split
     base_masks = masks.get_dataset_masks('example_masks', num_base_masks_total, **sim_config)
