@@ -106,14 +106,14 @@ def main():
 
     # TRAIN
     print("\n=== Generating TRAIN dataset ===")
-    for batch_start in tqdm(range(0, len(train_masks), batch_size), desc="Train batches"):
+    for batch_start in tqdm(range(0, len(train_masks), batch_size), desc="Train batches", disable=True):
         batch_masks = train_masks[batch_start : batch_start + batch_size]
         triplets = generate_triplets(batch_masks, mask_variants_per_mask=5, illum_per_mask=5, sim_config=sim_config)
         save_triplets(triplets, output_dir + "/train")
 
     # TEST
     print("\n=== Generating TEST dataset ===")
-    for batch_start in tqdm(range(0, len(test_masks), batch_size), desc="Test batches"):
+    for batch_start in tqdm(range(0, len(test_masks), batch_size), desc="Test batches", disable=True):
         batch_masks = test_masks[batch_start : batch_start + batch_size]
         triplets = generate_triplets(batch_masks, mask_variants_per_mask=5, illum_per_mask=5, sim_config=sim_config)
         save_triplets(triplets, output_dir + "/test")
