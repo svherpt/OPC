@@ -69,7 +69,7 @@ if __name__ == "__main__":
     config = {
         "model": {
             "name":      "unet_film",
-            "channels":  16,
+            "channels":  32,
             "illum_dim": 128,
         }
     }
