@@ -6,7 +6,7 @@ import src.core.simulator.masks as masks
 import json
 import torch
 from PIL import Image
-from src.core.optimizing.litho_mask_optimizer import SourceMaskOptimizer
+from core.optimizing.litho_mask_optimizer_old import SourceMaskOptimizer
 from src.core.ml.inferer import Inferer
 import src.visualizers.ml.optimizer_visualizer as optimization_visualizer
 import src.core.simulator.illuminator as illuminator

@@ -71,7 +71,7 @@ def plot_predictions(model, dataset, device, n=6, save_dir=None, show=True):
         plt.close()
 
 if __name__ == "__main__":
-    CHECKPOINT = "checkpoints/exp_014_baseline/epoch_0050.pt"
+    CHECKPOINT = "checkpoints/exp014_baseline/epoch_0050.pt"
     device     = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     model, checkpoint = load_model_from_checkpoint(CHECKPOINT)
