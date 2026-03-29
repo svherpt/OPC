@@ -82,10 +82,10 @@ def build_dataloaders(config):
 if __name__ == "__main__":
     config = {
         "data": {
-            "data_dir": "augmented_medium",
+            "data_dir": "augmented_large",
             "batch_size": 4,
             "num_workers": 2,
-            "max_samples": 400,
+            "max_samples": None,
         }
     }
 
