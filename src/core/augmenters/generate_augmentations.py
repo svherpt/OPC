@@ -89,52 +89,34 @@ def parse_args():
 
     return parser.parse_args()
 
-
 def main():
     args = parse_args()
 
     sim_config = misc.get_simulation_config()
-
     num_base_masks_total = args.num_base_masks
     output_dir = args.output_dir
 
-    # Train: 5 variants × 5 illum = 25 per mask
-    train_mask_variants = 5
-    train_illum_per_mask = 5
-
-    # Test: 5 variants × 5 illum = 25 per mask
-    test_mask_variants = 5
-    test_illum_per_mask = 5
-
-    # Always use example_masks
-    base_masks = masks.get_dataset_masks(
-        'example_masks',
-        num_base_masks_total,
-        **sim_config
-    )
+    batch_size = 40  # Hardcoded batch size to control RAM usage
 
     # Train/test split
+    base_masks = masks.get_dataset_masks('example_masks', num_base_masks_total, **sim_config)
     split_idx = int(0.8 * num_base_masks_total)
     train_masks = base_masks[:split_idx]
     test_masks = base_masks[split_idx:]
 
+    # TRAIN
     print("\n=== Generating TRAIN dataset ===")
-    train_triplets = generate_triplets(
-        train_masks,
-        mask_variants_per_mask=train_mask_variants,
-        illum_per_mask=train_illum_per_mask,
-        sim_config=sim_config
-    )
-    save_triplets(train_triplets, output_dir + "/train")
+    for batch_start in tqdm(range(0, len(train_masks), batch_size), desc="Train batches"):
+        batch_masks = train_masks[batch_start : batch_start + batch_size]
+        triplets = generate_triplets(batch_masks, mask_variants_per_mask=5, illum_per_mask=5, sim_config=sim_config)
+        save_triplets(triplets, output_dir + "/train")
 
+    # TEST
     print("\n=== Generating TEST dataset ===")
-    test_triplets = generate_triplets(
-        test_masks,
-        mask_variants_per_mask=test_mask_variants,
-        illum_per_mask=test_illum_per_mask,
-        sim_config=sim_config
-    )
-    save_triplets(test_triplets, output_dir + "/test")
+    for batch_start in tqdm(range(0, len(test_masks), batch_size), desc="Test batches"):
+        batch_masks = test_masks[batch_start : batch_start + batch_size]
+        triplets = generate_triplets(batch_masks, mask_variants_per_mask=5, illum_per_mask=5, sim_config=sim_config)
+        save_triplets(triplets, output_dir + "/test")
 
 
 if __name__ == "__main__":
