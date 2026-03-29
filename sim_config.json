@@ -1,6 +1,6 @@
 {
-    "mask_grid_size": 256,
-    "quadrant_illum_grid_size": 32,
+    "mask_grid_size": 128,
+    "quadrant_illum_grid_size": 16,
     "mask_width_nm": 2000,
     "wavelength_nm": 193,
     "numerical_aperture": 1.35,
