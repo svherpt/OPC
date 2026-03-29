@@ -29,7 +29,7 @@ def run_epoch(model, loader, optimizer, lambda_resist, training, device):
     desc    = "train" if training else "val"
     context = torch.enable_grad() if training else torch.no_grad()
     with context:
-        pbar = tqdm(loader, desc=f"  {desc}", leave=False, dynamic_ncols=True)
+        pbar = tqdm(loader, desc=f"  {desc}", leave=False, dynamic_ncols=True, disable=True)
         for mask, illum_q, intensity, resist in pbar:
             mask, illum_q, intensity, resist = (
                 mask.to(device), illum_q.to(device),

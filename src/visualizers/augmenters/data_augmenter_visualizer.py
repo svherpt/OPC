@@ -152,15 +152,15 @@ if __name__ == "__main__":
         sim_config = json.load(f)
 
     # Visualize mask augmentations
-    # while(True):
-    #     random_mask = masks.get_random_dataset_mask('example_masks', **sim_config)
-    #     mask_augmenter = MaskAugmenter()
-    #     visualize_random_mask_augmentations(mask_augmenter, random_mask)
+    while(True):
+        random_mask = masks.get_random_dataset_mask('example_masks', **sim_config)
+        mask_augmenter = MaskAugmenter()
+        visualize_random_mask_augmentations(mask_augmenter, random_mask)
 
     # Visualize illumination augmentations
     # while(True):
     #     illum_augmenter = IlluminationAugmenter()
     #     visualize_random_illumination_augmentations(illum_augmenter, sim_config)
 
-    while(True):
-        visualize_dataset_samples('augmented_medium', sim_config)
+    # while(True):
+    #     visualize_dataset_samples('augmented_medium', sim_config)
