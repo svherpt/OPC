@@ -16,8 +16,12 @@ venv/
 
 
 
-# Data (adjust if needed)
+# Data
 data/
+
+# But keep the example masks directory
+!data/example_masks/
+!data/example_masks/**
 
 #Checkpoints
 checkpoints/

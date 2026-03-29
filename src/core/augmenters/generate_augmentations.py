@@ -1,3 +1,4 @@
+import argparse
 import numpy as np
 from pathlib import Path
 from PIL import Image
@@ -19,9 +20,12 @@ def generate_triplets(base_masks, mask_variants_per_mask, illum_per_mask, sim_co
 
     triplets = []
 
-    for mask in base_masks:
+    for mask in tqdm(base_masks, desc="Processing masks"):
         # Generate mask variants
-        mask_variants = [mask_augmenter.random_augmentation(mask) for _ in range(mask_variants_per_mask)]
+        mask_variants = [
+            mask_augmenter.random_augmentation(mask)
+            for _ in range(mask_variants_per_mask)
+        ]
 
         for aug_mask in mask_variants:
             for _ in range(illum_per_mask):
@@ -38,9 +42,7 @@ def generate_triplets(base_masks, mask_variants_per_mask, illum_per_mask, sim_co
 
 
 def save_triplets(triplets, output_dir):
-    """
-    Save triplets in order (no shuffling).
-    """
+    """Save triplets in order (no shuffling)."""
     output_dir = Path("./data") / output_dir
     subdirs = ['masks', 'illuminations', 'intensities', 'resists']
 
@@ -54,59 +56,86 @@ def save_triplets(triplets, output_dir):
     for i, (mask, illumination, sim_results) in enumerate(triplets):
         file_id = start_id + i
 
-        Image.fromarray((mask * 255).astype(np.uint8)).save(output_dir / 'masks' / f"{file_id:06d}.png")
-        Image.fromarray((illumination * 255).astype(np.uint8)).save(output_dir / 'illuminations' / f"{file_id:06d}.png")
-        Image.fromarray((sim_results["wafer_intensity"] * 255).astype(np.uint8)).save(output_dir / 'intensities' / f"{file_id:06d}.png")
-        Image.fromarray((sim_results["resist_profile"] * 255).astype(np.uint8)).save(output_dir / 'resists' / f"{file_id:06d}.png")
+        Image.fromarray((mask * 255).astype(np.uint8)).save(
+            output_dir / 'masks' / f"{file_id:06d}.png"
+        )
+        Image.fromarray((illumination * 255).astype(np.uint8)).save(
+            output_dir / 'illuminations' / f"{file_id:06d}.png"
+        )
+        Image.fromarray((sim_results["wafer_intensity"] * 255).astype(np.uint8)).save(
+            output_dir / 'intensities' / f"{file_id:06d}.png"
+        )
+        Image.fromarray((sim_results["resist_profile"] * 255).astype(np.uint8)).save(
+            output_dir / 'resists' / f"{file_id:06d}.png"
+        )
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Generate lithography dataset")
+
+    parser.add_argument(
+        "--num_base_masks",
+        type=int,
+        required=True,
+        help="Total number of base masks to generate"
+    )
+
+    parser.add_argument(
+        "--output_dir",
+        type=str,
+        required=True,
+        help="Output directory (inside ./data/)"
+    )
+
+    return parser.parse_args()
+
 
 def main():
+    args = parse_args()
+
     sim_config = misc.get_simulation_config()
 
-    num_base_masks_total = 4
-    batch_size = 4
+    num_base_masks_total = args.num_base_masks
+    output_dir = args.output_dir
 
     # Train: 5 variants × 5 illum = 25 per mask
     train_mask_variants = 5
     train_illum_per_mask = 5
 
-    # Test: 1 variant × 5 illum = 5 per mask
+    # Test: 5 variants × 5 illum = 25 per mask
     test_mask_variants = 5
     test_illum_per_mask = 5
 
-    output_dir = 'augmented_large'
+    # Always use example_masks
+    base_masks = masks.get_dataset_masks(
+        'example_masks',
+        num_base_masks_total,
+        **sim_config
+    )
 
-    # Load base masks
-    base_masks = masks.get_dataset_masks('example_masks', num_base_masks_total, **sim_config)
-
-    split_idx = int(1 * num_base_masks_total)
+    # Train/test split
+    split_idx = int(0.8 * num_base_masks_total)
     train_masks = base_masks[:split_idx]
     test_masks = base_masks[split_idx:]
 
     print("\n=== Generating TRAIN dataset ===")
-    for batch_start in tqdm(range(0, len(train_masks), batch_size), desc="Train batches"):
-        batch_masks = train_masks[batch_start: batch_start + batch_size]
+    train_triplets = generate_triplets(
+        train_masks,
+        mask_variants_per_mask=train_mask_variants,
+        illum_per_mask=train_illum_per_mask,
+        sim_config=sim_config
+    )
+    save_triplets(train_triplets, output_dir + "/train")
 
-        triplets = generate_triplets(
-            batch_masks,
-            mask_variants_per_mask=train_mask_variants,
-            illum_per_mask=train_illum_per_mask,
-            sim_config=sim_config
-        )
+    print("\n=== Generating TEST dataset ===")
+    test_triplets = generate_triplets(
+        test_masks,
+        mask_variants_per_mask=test_mask_variants,
+        illum_per_mask=test_illum_per_mask,
+        sim_config=sim_config
+    )
+    save_triplets(test_triplets, output_dir + "/test")
 
-        save_triplets(triplets, output_dir + "/train")
-
-    # print("\n=== Generating TEST dataset ===")
-    # for batch_start in tqdm(range(0, len(test_masks), batch_size), desc="Test batches"):
-    #     batch_masks = test_masks[batch_start: batch_start + batch_size]
-
-    #     triplets = generate_triplets(
-    #         batch_masks,
-    #         mask_variants_per_mask=test_mask_variants,
-    #         illum_per_mask=test_illum_per_mask,
-    #         sim_config=sim_config
-    #     )
-
-    #     save_triplets(triplets, output_dir + "/test")
 
 if __name__ == "__main__":
     main()
