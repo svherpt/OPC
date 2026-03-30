@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from tqdm import tqdm
-
+import argparse
 import src.core.misc as misc
 import src.core.simulator.masks as masks
 import src.core.simulator.illuminator as illuminator
@@ -52,7 +52,7 @@ class SourceMaskOptimiser:
 
     def optimise(self, target_resist, illum_quadrant,
                 num_iterations=500, lr_mask=0.05,
-                initial_blur_mask=4.0, final_blur_mask=0.5,
+                initial_blur_mask=4.0, final_blur_mask=0.01,
                 tv_weight=0.01, binarize_final=True,
                 binary_iterations=200, binary_weight_max=0.3):
         """Optimise mask to match target resist with fixed illumination."""
@@ -134,13 +134,43 @@ class SourceMaskOptimiser:
 
         return mask_result, history
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Run OPC optimisation")
+
+    parser.add_argument(
+        "--checkpoint",
+        type=str,
+        required=True,
+        help="Path to model checkpoint (.pt file)"
+    )
+
+    parser.add_argument(
+        "--base_iterations",
+        type=int,
+        default=500,
+        help="Number of optimisation iterations"
+    )
+
+    parser.add_argument(
+        "--final_iterations",
+        type=int,
+        default=500,
+        help="Number of optimisation iterations"
+    )
+
+
+    return parser.parse_args()
+
+
+
+
 if __name__ == "__main__":
-    CHECKPOINT = "checkpoints/exp014_baseline/epoch_0050.pt"
+    args = parse_args()
     sim_config = misc.get_simulation_config()
     litho_sim  = simulator.LithographySimulator(sim_config)
     device     = "cuda" if torch.cuda.is_available() else "cpu"
 
-    optimiser = SourceMaskOptimiser(CHECKPOINT)
+    optimiser = SourceMaskOptimiser("checkpoints/" + args.checkpoint)
     target    = masks.get_random_dataset_mask(**sim_config).astype(np.float32)
 
     from src.core.augmenters.illumination_augmenter import IlluminationAugmenter
@@ -152,7 +182,8 @@ if __name__ == "__main__":
     mask_result, history = optimiser.optimise(
         target_resist=target,
         illum_quadrant=illum_q,
-        num_iterations=500,
+        num_iterations=args.base_iterations,
+        binary_iterations=args.final_iterations,
     )
 
     print(f"Mask  range : [{mask_result.min():.3f}, {mask_result.max():.3f}]")

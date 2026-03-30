@@ -69,8 +69,11 @@ def show_optimisation_results(target_resist, optimised_mask, optimised_illum_q,
     baseline_resist                  = _get_conventional_baseline(litho_sim, target_resist, sim_config)
     nn_intensity,    nn_resist       = _get_nn_prediction(model, optimised_mask, optimised_illum_q, device)
     litho_intensity, litho_resist    = _get_litho_prediction(litho_sim, optimised_mask, optimised_illum_q)
-    illum_display                    = _upsample_illumination(optimised_illum_q, target_size=optimised_mask.shape[0])
+    illum_display                    = optimised_illum_q
+    # illum_display                    = _upsample_illumination(optimised_illum_q, target_size=optimised_mask.shape[0])
     max_intensity                    = max(nn_intensity.max(), litho_intensity.max())
+
+    maxOptimisedIllum = optimised_illum_q.max()
 
     nn_mae    = np.abs(target_resist - nn_resist).mean()
     litho_mae = np.abs(target_resist - litho_resist).mean()
@@ -80,7 +83,7 @@ def show_optimisation_results(target_resist, optimised_mask, optimised_illum_q,
     _plot_field(axes[0, 0], target_resist,    "Target resist",              cmap="gray")
     _plot_field(axes[0, 1], baseline_resist,  "Conventional baseline",      cmap="gray")
     _plot_field(axes[0, 2], optimised_mask,   "Optimised mask",             cmap="gray")
-    _plot_field(axes[0, 3], illum_display,    "Optimised illumination",     cmap="hot")
+    _plot_field(axes[0, 3], illum_display,    "Optimised illumination",     cmap="hot", vmin=0, vmax=maxOptimisedIllum)
     _plot_field(axes[1, 0], nn_intensity,     "NN wafer intensity",         cmap="magma", vmin=0, vmax=max_intensity)
     _plot_field(axes[1, 1], litho_intensity,  "Litho wafer intensity",      cmap="magma", vmin=0, vmax=max_intensity)
     _plot_field(axes[1, 2], nn_resist,        f"NN resist (MAE {nn_mae:.4f})",    cmap="gray")
@@ -132,14 +135,18 @@ def create_optimisation_animation(target_resist, history, model, litho_sim, sim_
     title2 = axes[0, 2].set_title("Optimised mask (iter 0)", fontsize=11, fontweight="bold")
     axes[0, 2].axis("off")
 
-    im3    = axes[0, 3].imshow(_upsample_illumination(illum_snapshots[0], mask_snapshots[0].shape[0]), cmap="hot", vmin=0, vmax=1, origin="lower")
+    #max illumination for consistent color scaling across frames
+    maxIllum = max(np.array(illum_snapshots).max(), 1e-5)  # avoid zero max
+
+    # im3    = axes[0, 3].imshow(_upsample_illumination(illum_snapshots[0], mask_snapshots[0].shape[0]), cmap="hot", vmin=0, vmax=maxIllum, origin="lower")
+    im3    = axes[0, 3].imshow(illum_snapshots[0], cmap="hot", vmin=0, vmax=maxIllum, origin="lower")
     title3 = axes[0, 3].set_title("Optimised illumination (iter 0)", fontsize=11, fontweight="bold")
     axes[0, 3].axis("off")
 
     im4    = axes[1, 0].imshow(nn_intensities[0],    cmap="magma", vmin=0, vmax=max_intensity, origin="lower")
     axes[1, 0].set_title("NN wafer intensity",       fontsize=11, fontweight="bold")
     axes[1, 0].axis("off")
-
+    
     im5    = axes[1, 1].imshow(litho_intensities[0], cmap="magma", vmin=0, vmax=max_intensity, origin="lower")
     axes[1, 1].set_title("Litho wafer intensity",    fontsize=11, fontweight="bold")
     axes[1, 1].axis("off")
