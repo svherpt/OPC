@@ -185,3 +185,39 @@ def create_optimisation_animation(target_resist, history, model, litho_sim, sim_
         anim.save(output_path, writer=writer, dpi=150, progress_callback=lambda i, n: pbar.update(1))
     plt.close()
     print(f"Animation saved to {output_path}")
+
+def show_snapshot_evolution(history, sample_idx=0, save_dir="results", show=True):
+    """Show evolution of a single sample's mask snapshots across optimisation iterations."""
+    snapshots = history["mask_snapshots"]
+    if not snapshots:
+        print("No snapshots in history.")
+        return
+
+    N   = len(snapshots)
+    fig, axes = plt.subplots(1, N, figsize=(3 * N, 3))
+    if N == 1:
+        axes = [axes]
+
+    total_iterations = len(history["loss"])
+    snapshot_every   = total_iterations // N
+
+    for col, snapshot in enumerate(snapshots):
+        # snapshot is [N, H, W] for batch or [H, W] for single
+        mask = snapshot[sample_idx] if snapshot.ndim == 3 else snapshot
+        iteration = col * snapshot_every
+        ax = axes[col]
+        ax.imshow(mask, cmap="gray", vmin=0, vmax=1, origin="lower")
+        ax.set_title(f"iter {iteration}", fontsize=9)
+        ax.axis("off")
+
+    plt.suptitle(f"Mask evolution (sample {sample_idx})", fontsize=11, fontweight="bold")
+    plt.tight_layout()
+
+    save_path = Path(save_dir) / f"snapshot_evolution_{sample_idx}.png"
+    Path(save_dir).mkdir(parents=True, exist_ok=True)
+    plt.savefig(save_path, dpi=150, bbox_inches="tight")
+    print(f"Saved to {save_path}")
+    if show:
+        plt.show()
+    else:
+        plt.close()
