@@ -23,11 +23,11 @@ def simulate_and_save(masks, illum_quadrants, litho_sim, output_dir, start_id):
 
 def run_active_generate(checkpoint, output_dir, num_batches, batch_size,
                         base_iterations, binary_iterations, snapshot_every,
-                        coverage_weight, optimise_illum, sim_config):
+                        coverage_weight, optimise_illum, sim_config, no_compile):
     """Run optimiser over num_batches, collect all snapshots, simulate and save."""
     litho_sim       = simulator.LithographySimulator(sim_config)
     illum_augmenter = IlluminationAugmenter()
-    optimiser       = SourceMaskOptimiser(checkpoint)
+    optimiser       = SourceMaskOptimiser(checkpoint, no_compile)
 
     ensure_dirs(output_dir)
     file_id = get_start_id(output_dir)
@@ -107,4 +107,5 @@ if __name__ == "__main__":
         coverage_weight   = args.coverage_weight,
         optimise_illum    = not args.fix_illum,
         sim_config        = sim_config,
+        no_compile        = args.no_compile
     )
