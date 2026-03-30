@@ -27,7 +27,7 @@ def run_active_generate(checkpoint, output_dir, num_batches, batch_size,
     """Run optimiser over num_batches, collect all snapshots, simulate and save."""
     litho_sim       = simulator.LithographySimulator(sim_config)
     illum_augmenter = IlluminationAugmenter()
-    optimiser       = SourceMaskOptimiser(checkpoint, no_compile)
+    optimiser       = SourceMaskOptimiser(checkpoint, not no_compile)
 
     ensure_dirs(output_dir)
     file_id = get_start_id(output_dir)
@@ -47,7 +47,7 @@ def run_active_generate(checkpoint, output_dir, num_batches, batch_size,
             snapshot_every    = snapshot_every,
             coverage_weight   = coverage_weight,
             optimise_illum    = optimise_illum,
-            binarize_final    = False,  # keep continuous masks for training diversity
+            binarize_final    = binary_iterations > 0  # keep continuous masks for training diversity
         )
 
         # Flatten snapshots across batch and time dimensions
