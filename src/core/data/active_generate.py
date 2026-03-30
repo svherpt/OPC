@@ -7,8 +7,8 @@ import src.core.misc as misc
 import src.core.simulator.masks as masks_module
 import src.core.simulator.lithography_simulator as simulator
 from src.core.data.illumination_augmenter import IlluminationAugmenter
-from src.core.ml.optimiser import SourceMaskOptimiser
-from src.data.generate_augmentations import get_start_id, ensure_dirs, save_sample
+from src.core.optimizing.optimizer import SourceMaskOptimiser
+from src.core.data.generate_augmentations import get_start_id, ensure_dirs, save_sample
 
 
 def simulate_and_save(masks, illum_quadrants, litho_sim, output_dir, start_id):
@@ -68,33 +68,43 @@ def run_active_generate(checkpoint, output_dir, num_batches, batch_size,
 def parse_args():
     """Parse CLI arguments for active data generation."""
     parser = argparse.ArgumentParser(description="Generate active learning data via optimiser snapshots")
-    parser.add_argument("--checkpoint",        type=str,   required=True,  help="Checkpoint path under checkpoints/")
+    parser.add_argument("--run_name",          type=str,   required=True,  help="Experiment name matching checkpoints/<run_name>/")
     parser.add_argument("--output_dir",        type=str,   required=True,  help="Output directory under ./data/ — always appends to train")
-    parser.add_argument("--num_batches",       type=int,   default=10,     help="Number of optimisation batches to run")
-    parser.add_argument("--batch_size",        type=int,   default=512,    help="Masks per optimisation batch")
-    parser.add_argument("--base_iterations",   type=int,   default=350,    help="Continuous phase iterations")
-    parser.add_argument("--binary_iterations", type=int,   default=0,      help="Binary phase iterations (default off for snapshot diversity)")
-    parser.add_argument("--snapshot_every",    type=int,   default=50,     help="Save snapshot every N iterations")
+    parser.add_argument("--num_batches",       type=int,   default=1)
+    parser.add_argument("--batch_size",        type=int,   default=100)
+    parser.add_argument("--base_iterations",   type=int,   default=500)
+    parser.add_argument("--binary_iterations", type=int,   default=0)
+    parser.add_argument("--snapshot_every",    type=int,   default=50)
     parser.add_argument("--coverage_weight",   type=float, default=0.05)
     parser.add_argument("--no_compile",        action="store_true")
     parser.add_argument("--fix_illum",         action="store_true")
+    parser.add_argument("--resume", action="store_true", required=True, help="Active generation appends to existing data and uses latest checkpoint")
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args       = parse_args()
     sim_config = misc.get_simulation_config()
+
+    # Find latest checkpoint for this run
+    from pathlib import Path
+    checkpoints = sorted(Path(f"checkpoints/{args.run_name}").glob("epoch_*.pt"))
+    if not checkpoints:
+        raise FileNotFoundError(f"No checkpoints found under checkpoints/{args.run_name}/")
+    latest_checkpoint = str(checkpoints[-1])
+    print(f"Using checkpoint: {latest_checkpoint}")
+
     output_dir = f"./data/{args.output_dir}/train"
 
     run_active_generate(
-        checkpoint      = f"checkpoints/{args.checkpoint}",
-        output_dir      = output_dir,
-        num_batches     = args.num_batches,
-        batch_size      = args.batch_size,
-        base_iterations = args.base_iterations,
+        checkpoint        = latest_checkpoint,
+        output_dir        = output_dir,
+        num_batches       = args.num_batches,
+        batch_size        = args.batch_size,
+        base_iterations   = args.base_iterations,
         binary_iterations = args.binary_iterations,
-        snapshot_every  = args.snapshot_every,
-        coverage_weight = args.coverage_weight,
-        optimise_illum  = not args.fix_illum,
-        sim_config      = sim_config,
+        snapshot_every    = args.snapshot_every,
+        coverage_weight   = args.coverage_weight,
+        optimise_illum    = not args.fix_illum,
+        sim_config        = sim_config,
     )

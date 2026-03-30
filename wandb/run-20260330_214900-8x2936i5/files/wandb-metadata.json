@@ -1,0 +1,33 @@
+{
+  "os":  "macOS-10.16-x86_64-i386-64bit",
+  "python":  "CPython 3.9.6",
+  "startedAt":  "2026-03-30T19:49:00.083482Z",
+  "args":  [
+    "--config",
+    "configs/exp016.yaml",
+    "--data_dir",
+    "test_active_learning",
+    "--resume"
+  ],
+  "program":  "-m src.core.ml.train",
+  "git":  {
+    "remote":  "https://github.com/svherpt/OPC.git",
+    "commit":  "0f2757a225d691bf5b8079e6272da469bc06a708"
+  },
+  "email":  "simen.vanherpt@gmail.com",
+  "root":  "/Users/simen/Documents/Github/OPC",
+  "host":  "jans-mbp.home",
+  "executable":  "/Users/simen/Documents/Github/OPC/.venv/bin/python",
+  "cpu_count":  8,
+  "cpu_count_logical":  16,
+  "disk":  {
+    "/":  {
+      "total":  "1000240963584",
+      "used":  "399298957312"
+    }
+  },
+  "memory":  {
+    "total":  "17179869184"
+  },
+  "writerId":  "lmmeutr5r23bis7atlpncznp5ff2eaqd"
+}

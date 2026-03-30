@@ -123,30 +123,27 @@ def visualize_random_illumination_augmentations(augmenter, sim_config, n_samples
     plt.tight_layout()
     plt.show()
 
-def visualize_dataset_samples(data_dir, sim_config, n_samples=100):
-    """Visualizes a random selection of samples from the specified dataset directory."""
-    data_dir = Path("./data/" + data_dir)
+def visualise_sample(data_dir, file_id, sim_config, split="train"):
+    """Load and visualise a single sample by file ID."""
+    data_dir  = Path("./data") / data_dir / split
+    file_stem = f"{int(file_id):06d}"
 
-    # Pick random samples from train set
-    mask_files = sorted((data_dir / 'train' / 'masks').glob('*.png'))
-    selected = random.sample(mask_files, min(n_samples, len(mask_files)))
+    mask            = np.array(Image.open(data_dir / 'masks'        / f"{file_stem}.png")) / 255.0
+    illumination    = np.array(Image.open(data_dir / 'illuminations' / f"{file_stem}.png")) / 255.0
+    wafer_intensity = np.array(Image.open(data_dir / 'intensities'   / f"{file_stem}.png")) / 255.0
+    resist_profile  = np.array(Image.open(data_dir / 'resists'       / f"{file_stem}.png")) / 255.0
 
-    for mask_file in selected:
-        file_id = mask_file.stem
+    sim_results = {"wafer_intensity": wafer_intensity, "resist_profile": resist_profile}
+    simulation_visualizer.visualize_simulation_results(
+        sim_results, mask=mask, illumination=illumination, config=sim_config
+    )
 
-        mask = np.array(Image.open(data_dir / 'train' / 'masks' / f"{file_id}.png")) / 255.0
-        illumination = np.array(Image.open(data_dir / 'train' / 'illuminations' / f"{file_id}.png")) / 255.0
-        wafer_intensity = np.array(Image.open(data_dir / 'train' / 'intensities' / f"{file_id}.png")) / 255.0
-        resist_profile = np.array(Image.open(data_dir / 'train' / 'resists' / f"{file_id}.png")) / 255.0
 
-        sim_results = {"wafer_intensity": wafer_intensity, "resist_profile": resist_profile}
-
-        # Illumination is saved as full (64x64), extract quadrant for visualizer
-        h = illumination.shape[0] // 2
-        illum_quadrant = illumination[h:, h:]
-
-        simulation_visualizer.visualize_simulation_results(sim_results, mask=mask, illumination=illum_quadrant, config=sim_config)
-
+def visualise_random_sample(data_dir, sim_config, split="train"):
+    """Load and visualise a random sample from the dataset."""
+    mask_files = sorted((Path("./data") / data_dir / split / 'masks').glob('*.png'))
+    file_id    = random.choice(mask_files).stem
+    visualise_sample(data_dir, file_id, sim_config, split=split)
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Visualize OPC dataset / augmentations")
@@ -161,7 +158,7 @@ def parse_args():
         help="Visualize illumination augmentations"
     )
     parser.add_argument(
-        "--results",
+        "--random",
         action="store_true",
         help="Visualize simulation results from a dataset folder"
     )
@@ -171,6 +168,9 @@ def parse_args():
         default="augmented_medium",
         help="Dataset folder to visualize (for results)"
     )
+    
+    parser.add_argument("--start_id",           type=int, default=None, help="Visualize specific sample by file ID")
+
 
     return parser.parse_args()
 
@@ -192,5 +192,14 @@ if __name__ == "__main__":
         while True:
             visualize_random_illumination_augmentations(illum_augmenter, sim_config)
 
-    if args.results:
-        visualize_dataset_samples(args.data_dir, sim_config)
+
+    if args.start_id is not None:
+        startID = args.start_id
+        while True:
+            print("Visualizing sample with ID:", startID)
+            visualise_sample(args.data_dir, startID, sim_config)
+            startID += 1
+
+    if args.random:
+        while True:
+            visualise_random_sample(args.data_dir, sim_config)

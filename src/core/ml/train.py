@@ -1,3 +1,4 @@
+# src/core/ml/train.py
 import torch
 import torch.nn as nn
 import wandb
@@ -49,12 +50,6 @@ def run_epoch(model, loader, optimizer, lambda_resist, training, device):
             total_int_loss += int_loss.item()
             total_res_loss += res_loss.item()
 
-            pbar.set_postfix({
-                "loss": f"{loss.item():.4f}",
-                "int":  f"{int_loss.item():.4f}",
-                "res":  f"{res_loss.item():.4f}",
-            })
-
     n = len(loader)
     return total_loss / n, total_int_loss / n, total_res_loss / n
 
@@ -91,7 +86,7 @@ def load_latest_checkpoint(checkpoint_dir, model, optimizer, scheduler, device):
     return start_epoch, run_id
 
 
-def train(config_path, data_dir, resume=False):
+def train(config_path, data_dir=None, resume=False, epochs_override=None):
     """Run full training loop from a YAML config path, optionally resuming from latest checkpoint."""
     config = load_config(config_path)
     tcfg   = config["training"]
@@ -99,7 +94,15 @@ def train(config_path, data_dir, resume=False):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Training on: {device}")
 
-    train_loader, test_loader = build_dataloaders(config, data_dir)
+    if data_dir is not None:
+        config["data"]["data_dir"] = data_dir
+        print(f"data_dir overridden to: {data_dir}")
+
+    if epochs_override is not None:
+        tcfg["epochs"] = epochs_override
+        print(f"epochs overridden to: {epochs_override}")
+
+    train_loader, test_loader = build_dataloaders(config)
     model     = build_model(config).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=tcfg["lr"])
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -116,7 +119,7 @@ def train(config_path, data_dir, resume=False):
             checkpoint_dir, model, optimizer, scheduler, device
         )
         if start_epoch > tcfg["epochs"]:
-            print("Training already complete.")
+            print(f"Already trained to epoch {tcfg['epochs']}, nothing to do.")
             return
 
     run = wandb.init(
@@ -187,9 +190,9 @@ def train(config_path, data_dir, resume=False):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", type=str, default="configs/exp001_baseline.yaml")
-    parser.add_argument("--resume", action="store_true", help="Resume from latest checkpoint")
-    parser.add_argument("--data_dir", type=str,  default=None, help="Data directory")
-
+    parser.add_argument("--config",   type=str,  default="configs/exp001_baseline.yaml")
+    parser.add_argument("--resume",   action="store_true", help="Resume from latest checkpoint")
+    parser.add_argument("--data_dir", type=str,  default=None, help="Override data_dir from config")
+    parser.add_argument("--epochs",   type=int,  default=None, help="Override epochs from config")
     args = parser.parse_args()
-    train(args.config, data_dir=args.data_dir, resume=args.resume)
+    train(args.config, data_dir=args.data_dir, resume=args.resume, epochs_override=args.epochs)
