@@ -35,8 +35,6 @@ class MaskAugmenter:
         ]
 
 
-    # ── Existing augmentation methods (unchanged) ─────────────────────────
-
     def add_random_squares(self, mask, num_squares=5, max_size=10):
         result = mask.copy().astype(float)
         offsetFactor = 5
@@ -92,8 +90,6 @@ class MaskAugmenter:
         return self.add_erosion_boundary_noise(result, morph_size, erosion_density)
 
 
-    # ── Softening methods ─────────────────────────────────────────────────
-
     def _soften_blur(self, mask, sigma_range=(0.5, 2.0)):
         """Soften mask edges with Gaussian blur."""
         sigma = np.random.uniform(*sigma_range)
@@ -113,9 +109,6 @@ class MaskAugmenter:
         """Apply one randomly chosen softening method."""
         fn = random.choice(self._softening_ops)
         return fn(mask)
-
-
-    # ── Core augmentation ─────────────────────────────────────────────────
 
     def batch_augment(self, masks, augmentations_per_mask=5):
         masks     = np.asarray(masks)

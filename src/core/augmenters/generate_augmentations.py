@@ -1,9 +1,9 @@
+# src/data/generate_augmentations.py
 import argparse
 import numpy as np
 from pathlib import Path
 from PIL import Image
 from tqdm import tqdm
-
 from src.core.augmenters.mask_augmenter import MaskAugmenter
 from src.core.augmenters.illumination_augmenter import IlluminationAugmenter
 import src.core.simulator.masks as masks
@@ -12,26 +12,26 @@ import src.core.simulator.illuminator as illuminator
 import src.core.misc as misc
 
 
-# ─────────────────────────────────────────────────────────────
-# Helpers
-# ─────────────────────────────────────────────────────────────
-
 def get_start_id(output_dir):
-    mask_dir = output_dir / "masks"
+    """Return next file ID by counting existing mask PNGs."""
+    mask_dir = Path(output_dir) / "masks"
     mask_dir.mkdir(parents=True, exist_ok=True)
     return len(list(mask_dir.glob("*.png")))
 
 
 def ensure_dirs(output_dir):
+    """Create subdirectories for masks, illuminations, intensities and resists."""
     for sub in ['masks', 'illuminations', 'intensities', 'resists']:
-        (output_dir / sub).mkdir(parents=True, exist_ok=True)
+        (Path(output_dir) / sub).mkdir(parents=True, exist_ok=True)
 
 
-def save_sample(output_dir, file_id, mask, illumination, sim_results):
+def save_sample(output_dir, file_id, mask, illum_quadrant, sim_results):
+    """Save a single sample to disk as PNG files."""
+    output_dir = Path(output_dir)
     Image.fromarray((mask * 255).astype(np.uint8)).save(
         output_dir / 'masks' / f"{file_id:06d}.png"
     )
-    Image.fromarray((illumination * 255).astype(np.uint8)).save(
+    Image.fromarray((illum_quadrant * 255).astype(np.uint8)).save(
         output_dir / 'illuminations' / f"{file_id:06d}.png"
     )
     Image.fromarray((sim_results["wafer_intensity"] * 255).astype(np.uint8)).save(
@@ -42,109 +42,77 @@ def save_sample(output_dir, file_id, mask, illumination, sim_results):
     )
 
 
-# ─────────────────────────────────────────────────────────────
-# Core generation (streaming)
-# ─────────────────────────────────────────────────────────────
-
-def process_split(base_masks, output_dir, sim_config, batch_size, desc):
-    output_dir = Path("./data") / output_dir
+def process_split(base_masks, output_dir, sim_config, batch_size,
+                  mask_variants, illum_per_variant, desc):
+    """Generate and save augmented samples for a set of base masks."""
     ensure_dirs(output_dir)
-
-    file_id = get_start_id(output_dir)
-
-    mask_augmenter = MaskAugmenter()
-    illum_augmenter = IlluminationAugmenter()
-    sim = simulator.LithographySimulator(sim_config)
+    file_id     = get_start_id(output_dir)
+    mask_aug    = MaskAugmenter()
+    illum_aug   = IlluminationAugmenter()
+    sim         = simulator.LithographySimulator(sim_config)
 
     for batch_start in tqdm(range(0, len(base_masks), batch_size), desc=desc):
-        batch_masks = base_masks[batch_start : batch_start + batch_size]
-
-        for mask in batch_masks:
-            mask_variants = [
-                mask_augmenter.random_augmentation(mask)
-                for _ in range(5)
-            ]
-
-            for aug_mask in mask_variants:
-                for _ in range(5):
-                    illum_quadrant = illum_augmenter.augment_illumination(**sim_config)
-                    illum_quadrant /= (illum_quadrant.sum() + 1e-8)
-
-                    sim_results = sim.simulate(aug_mask, illum_quadrant)
-                    full_illum = illuminator.quadrant_to_full(illum_quadrant)
-
-                    # SAVE IMMEDIATELY
-                    save_sample(output_dir, file_id, aug_mask, full_illum, sim_results)
+        batch = base_masks[batch_start: batch_start + batch_size]
+        for mask in batch:
+            variants = [mask_aug.random_augmentation(mask) for _ in range(mask_variants)]
+            for aug_mask in variants:
+                for _ in range(illum_per_variant):
+                    illum_q  = illum_aug.augment_illumination(**sim_config)
+                    illum_q /= (illum_q.sum() + 1e-8)
+                    sim_results = sim.simulate(aug_mask, illum_q)
+                    save_sample(output_dir, file_id, aug_mask, illum_q, sim_results)
                     file_id += 1
 
 
-# ─────────────────────────────────────────────────────────────
-# CLI
-# ─────────────────────────────────────────────────────────────
-
 def parse_args():
-    parser = argparse.ArgumentParser(description="Generate lithography dataset (streaming)")
-
-    parser.add_argument(
-        "--num_base_masks",
-        type=int,
-        required=True,
-        help="Total number of base masks"
-    )
-
-    parser.add_argument(
-        "--batch_size",
-        type=int,
-        default=10,
-        help="Batch size (does NOT affect memory anymore)"
-    )
-
-    parser.add_argument(
-        "--output_dir",
-        type=str,
-        required=True,
-        help="Output directory inside ./data/"
-    )
-
+    """Parse CLI arguments for dataset generation."""
+    parser = argparse.ArgumentParser(description="Generate augmented lithography dataset")
+    parser.add_argument("--num_base_masks",   type=int,   required=True,      help="Total number of base masks to use")
+    parser.add_argument("--output_dir",       type=str,   required=True,      help="Output directory name under ./data/")
+    parser.add_argument("--train_split",      type=float, default=0.8,        help="Fraction of masks used for train (rest goes to test)")
+    parser.add_argument("--mask_variants",    type=int,   default=5,          help="Augmented mask variants per base mask")
+    parser.add_argument("--illum_per_variant",type=int,   default=5,          help="Illuminations per mask variant")
+    parser.add_argument("--batch_size",       type=int,   default=10,         help="Processing batch size")
     return parser.parse_args()
 
 
-# ─────────────────────────────────────────────────────────────
-# Main
-# ─────────────────────────────────────────────────────────────
-
 def main():
-    args = parse_args()
-
+    args       = parse_args()
     sim_config = misc.get_simulation_config()
 
-    base_masks = masks.get_dataset_masks(
-        'example_masks',
-        args.num_base_masks,
-        **sim_config
-    )
-
-    split_idx = int(0.8 * args.num_base_masks)
+    base_masks = masks.get_dataset_masks('example_masks', args.num_base_masks, **sim_config)
+    split_idx  = int(args.train_split * args.num_base_masks)
     train_masks = base_masks[:split_idx]
-    test_masks = base_masks[split_idx:]
+    test_masks  = base_masks[split_idx:]
 
-    print("\n=== TRAIN ===")
-    process_split(
-        train_masks,
-        args.output_dir + "/train",
-        sim_config,
-        args.batch_size,
-        desc="Train batches"
-    )
+    total_train = len(train_masks) * args.mask_variants * args.illum_per_variant
+    total_test  = len(test_masks)  * args.mask_variants * args.illum_per_variant
+    print(f"Generating {total_train} train samples and {total_test} test samples")
+    print(f"Output: ./data/{args.output_dir}")
 
-    print("\n=== TEST ===")
-    process_split(
-        test_masks,
-        args.output_dir + "/test",
-        sim_config,
-        args.batch_size,
-        desc="Test batches"
-    )
+    if train_masks:
+        print("\n=== TRAIN ===")
+        process_split(
+            train_masks,
+            f"./data/{args.output_dir}/train",
+            sim_config,
+            args.batch_size,
+            args.mask_variants,
+            args.illum_per_variant,
+            desc="Train batches"
+        )
+
+    if len(test_masks) > 0:
+        print("\n=== TEST ===")
+        process_split(
+            test_masks,
+            f"./data/{args.output_dir}/test",
+            sim_config,
+            args.batch_size,
+            args.mask_variants,
+            args.illum_per_variant,
+            desc="Test batches"
+        )
 
 
 if __name__ == "__main__":
