@@ -61,9 +61,10 @@ class SourceMaskOptimiser:
 
 
     def _tv_loss(self, x):
-        """Compute mean total variation loss across batch."""
-        return torch.mean(torch.abs(x[:, :, :, 1:] - x[:, :, :, :-1])) + \
-               torch.mean(torch.abs(x[:, :, 1:, :] - x[:, :, :-1, :]))
+        """Compute total variation loss normalised per sample."""
+        N = x.shape[0]
+        return (torch.sum(torch.abs(x[:, :, :, 1:] - x[:, :, :, :-1])) +
+                torch.sum(torch.abs(x[:, :, 1:, :] - x[:, :, :-1, :]))) / N
 
 
     def optimise_batch(self, target_resists, illum_quadrants,
@@ -138,7 +139,7 @@ class SourceMaskOptimiser:
 
             pred_resist = pred_resist.float()
 
-            resist_loss = F.mse_loss(pred_resist, target)
+            resist_loss = F.mse_loss(pred_resist, target, reduction='sum') / N
             tv_loss     = self._tv_loss(mask)
 
             if not in_binary_phase:
@@ -147,7 +148,7 @@ class SourceMaskOptimiser:
             else:
                 binary_progress    = (i - num_iterations) / binary_iterations
                 binary_weight      = binary_weight_max * (binary_progress ** 2)
-                binary_penalty     = torch.mean(4 * mask * (1 - mask))
+                binary_penalty     = torch.sum(4 * mask * (1 - mask)) / N
                 binary_penalty_val = binary_penalty.item()
                 loss               = resist_loss + tv_weight * tv_loss + binary_weight * binary_penalty
 
@@ -207,7 +208,7 @@ def parse_args():
     parser.add_argument("--binary_iterations", type=int, default=150,   help="Binary phase iterations")
     parser.add_argument("--snapshot_every",    type=int, default=50,    help="Save snapshot every N iterations")
     parser.add_argument("--no_compile",        action="store_true",     help="Disable torch.compile")
-    
+
     return parser.parse_args()
 
 
