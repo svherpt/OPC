@@ -22,6 +22,7 @@ data/
 # But keep the example masks directory
 !data/example_masks/
 !data/example_masks/**
+!src/core/data/
 
 #Checkpoints
 checkpoints/
