@@ -102,7 +102,7 @@ def train(config_path, data_dir=None, resume=False, epochs_override=None):
         tcfg["epochs"] = epochs_override
         print(f"epochs overridden to: {epochs_override}")
 
-    train_loader, test_loader = build_dataloaders(config)
+    train_loader, test_loader = build_dataloaders(config, data_dir)
     model     = build_model(config).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=tcfg["lr"])
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
