@@ -91,7 +91,7 @@ def load_latest_checkpoint(checkpoint_dir, model, optimizer, scheduler, device):
     return start_epoch, run_id
 
 
-def train(config_path, resume=False):
+def train(config_path, data_dir, resume=False):
     """Run full training loop from a YAML config path, optionally resuming from latest checkpoint."""
     config = load_config(config_path)
     tcfg   = config["training"]
@@ -99,7 +99,7 @@ def train(config_path, resume=False):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Training on: {device}")
 
-    train_loader, test_loader = build_dataloaders(config)
+    train_loader, test_loader = build_dataloaders(config, data_dir)
     model     = build_model(config).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=tcfg["lr"])
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -189,5 +189,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str, default="configs/exp001_baseline.yaml")
     parser.add_argument("--resume", action="store_true", help="Resume from latest checkpoint")
+    parser.add_argument("--data_dir", type=str,  default=None, help="Data directory")
+
     args = parser.parse_args()
-    train(args.config, resume=args.resume)
+    train(args.config, data_dir=args.data_dir, resume=args.resume)

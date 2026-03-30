@@ -53,13 +53,13 @@ class LithographyDataset(Dataset):
         return mask, illum_q, intensity, resist
 
 
-def build_dataloaders(config):
+def build_dataloaders(config, data_dir):
     """Build train and test DataLoaders from config['data'] with keys: data_dir, batch_size, num_workers, max_samples."""
     data_cfg    = config["data"]
     max_samples = data_cfg.get("max_samples", None)
 
-    train_dataset = LithographyDataset(data_cfg["data_dir"], split="train", max_samples=max_samples)
-    test_dataset  = LithographyDataset(data_cfg["data_dir"], split="test",  max_samples=max_samples)
+    train_dataset = LithographyDataset(data_dir, split="train", max_samples=max_samples)
+    test_dataset  = LithographyDataset(data_dir, split="test",  max_samples=max_samples)
 
     train_loader = DataLoader(
         train_dataset,
@@ -82,14 +82,14 @@ def build_dataloaders(config):
 if __name__ == "__main__":
     config = {
         "data": {
-            "data_dir": "augmented_large",
             "batch_size": 4,
             "num_workers": 2,
             "max_samples": None,
         }
     }
 
-    train_loader, test_loader = build_dataloaders(config)
+    data_dir = "augmented_medium"
+    train_loader, test_loader = build_dataloaders(config, data_dir)
 
     print(f"\nTrain batches : {len(train_loader)}")
     print(f"Test batches  : {len(test_loader)}")

@@ -3,7 +3,7 @@ from pathlib import Path
 
 
 REQUIRED_KEYS = {
-    "data":     ["data_dir", "batch_size"],
+    "data":     ["batch_size"],
     "model":    ["name"],
     "training": ["epochs", "lr", "lambda_resist"],
     "wandb":    ["project"],
