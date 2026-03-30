@@ -207,6 +207,7 @@ def parse_args():
     parser.add_argument("--binary_iterations", type=int, default=150,   help="Binary phase iterations")
     parser.add_argument("--snapshot_every",    type=int, default=50,    help="Save snapshot every N iterations")
     parser.add_argument("--no_compile",        action="store_true",     help="Disable torch.compile")
+    
     return parser.parse_args()
 
 
