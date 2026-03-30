@@ -61,20 +61,27 @@ class IlluminationAugmenter:
         return illum
 
     def augment_illumination(self, quadrant_illum_grid_size, numerical_aperture, wavelength_nm, **kwargs):
+        """Generate a random augmented illumination quadrant, normalised so intensities sum to 1."""
         max_spatial_freq = numerical_aperture / wavelength_nm
-
-        # Sample 1-3 samplers and combine with Dirichlet weights (sum to 1)
-        samplers = random.sample(self._weighted_samplers, k=np.random.randint(1, 4))
-        weights = np.random.dirichlet(np.ones(len(samplers)))
-
+        samplers  = random.sample(self._weighted_samplers, k=np.random.randint(1, 4))
+        weights   = np.random.dirichlet(np.ones(len(samplers)))
         components = [
             self._generate(quadrant_illum_grid_size, max_spatial_freq, sampler, n_modes=np.random.randint(1, 15))
             for sampler in samplers
         ]
         normalized = [c / c.max() if c.max() > 0 else c for c in components]
-        illum = sum(w * c for w, c in zip(weights, normalized))
-
+        illum      = sum(w * c for w, c in zip(weights, normalized))
         if np.random.random() < 0.3:
             illum = rotate(illum, angle=np.random.uniform(-45, 45), reshape=False, order=1, mode='nearest')
 
-        return np.clip(illum, 0, 1)
+        #Clip and normalise to sum=1 for consistent exposure     
+        illum = np.clip(illum, 0, 1)
+        illum /= (illum.sum() + 1e-8)
+        return illum
+    
+    def get_batch(self, batch_size, sim_config):
+        """Generate a batch of random augmented illumination quadrants."""
+        return np.stack([
+            self.augment_illumination(**sim_config).astype(np.float32)
+            for _ in range(batch_size)
+        ])

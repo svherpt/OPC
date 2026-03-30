@@ -8,16 +8,18 @@ from src.core.augmenters.mask_augmenter import MaskAugmenter
 from src.core.augmenters.illumination_augmenter import IlluminationAugmenter
 import src.core.simulator.masks as masks
 import src.core.simulator.lithography_simulator as simulator
-import src.core.simulator.illuminator as illuminator
 import src.core.misc as misc
 
 
 def get_start_id(output_dir):
-    """Return next file ID by counting existing mask PNGs."""
-    mask_dir = Path(output_dir) / "masks"
-    mask_dir.mkdir(parents=True, exist_ok=True)
-    return len(list(mask_dir.glob("*.png")))
-
+    """Return next file ID based on minimum count across all subdirectories."""
+    output_dir = Path(output_dir)
+    counts = [
+        len(list((output_dir / sub).glob("*.png")))
+        for sub in ['masks', 'illuminations', 'intensities', 'resists']
+        if (output_dir / sub).exists()
+    ]
+    return min(counts) if counts else 0
 
 def ensure_dirs(output_dir):
     """Create subdirectories for masks, illuminations, intensities and resists."""
@@ -58,7 +60,6 @@ def process_split(base_masks, output_dir, sim_config, batch_size,
             for aug_mask in variants:
                 for _ in range(illum_per_variant):
                     illum_q  = illum_aug.augment_illumination(**sim_config)
-                    illum_q /= (illum_q.sum() + 1e-8)
                     sim_results = sim.simulate(aug_mask, illum_q)
                     save_sample(output_dir, file_id, aug_mask, illum_q, sim_results)
                     file_id += 1

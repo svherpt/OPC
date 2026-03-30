@@ -20,6 +20,12 @@ def get_dataset_masks(dir_path="example_masks", num_masks=5, **kwargs):
 
     return [read_mask_from_img(os.path.join(dir_path, file_path), **kwargs) for file_path in selected_files]
 
+def get_batch(dir_path, batch_size, **kwargs):
+    """Return a batch of random masks as a stacked float32 array [N, H, W]."""
+    return np.stack([
+        m.astype(np.float32)
+        for m in get_dataset_masks(dir_path, batch_size, **kwargs)
+    ])
 
 def read_mask_from_img(file_path, **kwargs):
     """Reads a mask from an image file, converts it to binary, and resizes it to the desired grid size."""
