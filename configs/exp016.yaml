@@ -1,0 +1,17 @@
+data:
+  batch_size: 128
+  num_workers: 2
+  max_samples: null  # null = use all, set to e.g. 2000 for quick runs
+
+model:
+  name: unet_film_v2
+  channels: 16
+  illum_dim: 128
+
+training:
+  epochs: 50
+  lr: 0.001
+  lambda_resist: 0.01
+
+wandb:
+  project: opc_surrogate
