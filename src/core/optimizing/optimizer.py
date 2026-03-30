@@ -8,12 +8,12 @@ import argparse
 
 import src.core.misc as misc
 import src.core.simulator.masks as masks_module
-from src.core.augmenters.illumination_augmenter import IlluminationAugmenter
+from src.core.data.illumination_augmenter import IlluminationAugmenter
 from src.core.ml.predict import load_model_from_checkpoint
 
 
 class SourceMaskOptimiser:
-    """Gradient-based optimiser for batches of masks given fixed illuminations."""
+    """Gradient-based optimiser for batches of masks and illuminations."""
 
     def __init__(self, checkpoint_path, compile_model=True):
         """Load surrogate model from checkpoint, freeze parameters, and optionally compile."""
@@ -76,21 +76,35 @@ class SourceMaskOptimiser:
 
 
     def optimise_batch(self, target_resists, illum_quadrants,
-                       num_iterations=500, lr_mask=0.05,
+                       num_iterations=500, lr_mask=0.05, lr_illum=0.05,
                        initial_blur_mask=4.0, final_blur_mask=0.01,
-                       tv_weight=0.01, binarize_final=True,
-                       binary_iterations=200, binary_weight_max=0.3,
-                       snapshot_every=50):
-        """Optimise a batch of masks in parallel, returning results and snapshot history."""
+                       tv_weight=0.01, coverage_weight=0.05,
+                       binarize_final=True, binary_iterations=200,
+                       binary_weight_max=0.3, snapshot_every=50,
+                       optimise_illum=True):
+        """Optimise a batch of masks (and optionally illuminations) in parallel."""
         N      = len(target_resists)
         target = torch.from_numpy(target_resists.astype(np.float32)).unsqueeze(1).to(self.device)
-        illum  = torch.from_numpy(illum_quadrants.astype(np.float32)).unsqueeze(1).to(self.device)
 
-        mask_param = nn.Parameter(
+        illum_tensor = torch.from_numpy(illum_quadrants.astype(np.float32)).unsqueeze(1).to(self.device)
+        mask_param   = nn.Parameter(
             torch.from_numpy(target_resists.copy().astype(np.float32)).unsqueeze(1).to(self.device)
         )
-        optimizer = torch.optim.Adam([{"params": [mask_param], "lr": lr_mask}])
-        history   = {"loss": [], "resist_loss": [], "tv_loss": [], "binary_penalty": [], "mask_snapshots": []}
+
+        if optimise_illum:
+            illum_param = nn.Parameter(illum_tensor.clone())
+            optimizer   = torch.optim.Adam([
+                {"params": [mask_param],  "lr": lr_mask},
+                {"params": [illum_param], "lr": lr_illum},
+            ])
+        else:
+            illum_param = illum_tensor
+            optimizer   = torch.optim.Adam([{"params": [mask_param], "lr": lr_mask}])
+
+        history = {
+            "loss": [], "resist_loss": [], "tv_loss": [], "coverage_loss": [],
+            "binary_penalty": [], "mask_snapshots": [], "illum_snapshots": [],
+        }
 
         total_iterations = num_iterations + (binary_iterations if binarize_final else 0)
         pbar = tqdm(range(total_iterations), desc=f"Optimising batch of {N}")
@@ -100,7 +114,8 @@ class SourceMaskOptimiser:
             in_binary_phase = binarize_final and i >= num_iterations
             blur_sigma      = self._blur_schedule(i, num_iterations, initial_blur_mask,
                                                   final_blur_mask, in_binary_phase, binary_iterations)
-            mask = self._apply_blur(mask_param, blur_sigma)
+            mask  = self._apply_blur(mask_param, blur_sigma)
+            illum = torch.clamp(illum_param, 0.0, 1.0) if optimise_illum else illum_param
 
             if self.use_amp:
                 with torch.autocast(device_type="cuda"):
@@ -108,74 +123,84 @@ class SourceMaskOptimiser:
             else:
                 _, pred_resist = self.model(mask, illum)
 
-            pred_resist = pred_resist.float()
-            resist_loss = F.mse_loss(pred_resist, target, reduction='sum') / N
-            tv_loss     = self._tv_loss(mask)
+            pred_resist   = pred_resist.float()
+            resist_loss   = F.mse_loss(pred_resist, target, reduction='sum') / N
+            tv_loss       = self._tv_loss(mask)
+            coverage_loss = (pred_resist.mean(dim=[1,2,3]) - target.mean(dim=[1,2,3])).pow(2).sum() / N
 
             if not in_binary_phase:
-                loss               = resist_loss + tv_weight * tv_loss
+                loss               = resist_loss + tv_weight * tv_loss + coverage_weight * coverage_loss
                 binary_penalty_val = 0.0
             else:
                 binary_progress    = (i - num_iterations) / binary_iterations
                 binary_weight      = binary_weight_max * (binary_progress ** 2)
                 binary_penalty     = torch.sum(4 * mask * (1 - mask)) / N
                 binary_penalty_val = binary_penalty.item()
-                loss               = resist_loss + tv_weight * tv_loss + binary_weight * binary_penalty
+                loss               = resist_loss + tv_weight * tv_loss + coverage_weight * coverage_loss + binary_weight * binary_penalty
 
             loss.backward()
-            torch.nn.utils.clip_grad_norm_([mask_param], max_norm=1.0)
+            params_to_clip = [mask_param, illum_param] if optimise_illum else [mask_param]
+            torch.nn.utils.clip_grad_norm_(params_to_clip, max_norm=1.0)
             optimizer.step()
 
             with torch.no_grad():
                 history["loss"].append(loss.item())
                 history["resist_loss"].append(resist_loss.item())
                 history["tv_loss"].append(tv_loss.item())
+                history["coverage_loss"].append(coverage_loss.item())
                 history["binary_penalty"].append(binary_penalty_val)
                 if i % snapshot_every == 0:
                     history["mask_snapshots"].append(mask.squeeze(1).cpu().numpy().copy())
+                    history["illum_snapshots"].append(illum.squeeze(1).detach().cpu().numpy().copy())
 
             if i % 20 == 0:
                 phase = "BINARY" if in_binary_phase else "CONT"
                 pbar.set_postfix({
-                    "phase":  phase,
-                    "loss":   f"{loss.item():.6f}",
-                    "resist": f"{resist_loss.item():.6f}",
-                    "tv":     f"{tv_loss.item():.4f}",
-                    "blur":   f"{blur_sigma:.2f}",
+                    "phase":    phase,
+                    "loss":     f"{loss.item():.6f}",
+                    "resist":   f"{resist_loss.item():.6f}",
+                    "coverage": f"{coverage_loss.item():.4f}",
+                    "tv":       f"{tv_loss.item():.4f}",
+                    "blur":     f"{blur_sigma:.2f}",
                     **({"bin": f"{binary_penalty_val:.4f}"} if in_binary_phase else {}),
                 })
 
         with torch.no_grad():
-            raw          = self._apply_blur(mask_param, 0.1).detach().squeeze(1).cpu().numpy()
-            mask_results = (raw > 0.5).astype(np.float32)
+            raw           = self._apply_blur(mask_param, 0.1).detach().squeeze(1).cpu().numpy()
+            mask_results  = (raw > 0.5).astype(np.float32)
+            illum_results = torch.clamp(illum_param, 0.0, 1.0).detach().squeeze(1).cpu().numpy() \
+                            if optimise_illum else illum_quadrants
 
         if binarize_final:
             edges = np.sum((raw > 0.1) & (raw < 0.9))
             print(f"Mask binary quality: {100 * (1 - edges / raw.size):.1f}% pixels near 0 or 1")
 
-        return mask_results, history
+        return mask_results, illum_results, history
 
 
     def optimise(self, target_resist, illum_quadrant, **kwargs):
         """Optimise a single mask — convenience wrapper around optimise_batch."""
-        mask_results, history = self.optimise_batch(
+        mask_results, illum_results, history = self.optimise_batch(
             target_resists  = target_resist[np.newaxis],
             illum_quadrants = illum_quadrant[np.newaxis],
             **kwargs
         )
-        history["mask_snapshots"] = [s[0] for s in history["mask_snapshots"]]
-        return mask_results[0], history
+        history["mask_snapshots"]  = [s[0] for s in history["mask_snapshots"]]
+        history["illum_snapshots"] = [s[0] for s in history["illum_snapshots"]]
+        return mask_results[0], illum_results[0], history
 
 
 def parse_args():
     """Parse CLI arguments for optimiser."""
     parser = argparse.ArgumentParser(description="Run OPC mask optimisation")
-    parser.add_argument("--checkpoint",        type=str, required=True)
-    parser.add_argument("--batch_size",        type=int, default=8)
-    parser.add_argument("--base_iterations",   type=int, default=350)
-    parser.add_argument("--binary_iterations", type=int, default=150)
-    parser.add_argument("--snapshot_every",    type=int, default=50)
+    parser.add_argument("--checkpoint",        type=str,   required=True)
+    parser.add_argument("--batch_size",        type=int,   default=8)
+    parser.add_argument("--base_iterations",   type=int,   default=350)
+    parser.add_argument("--binary_iterations", type=int,   default=150)
+    parser.add_argument("--snapshot_every",    type=int,   default=50)
+    parser.add_argument("--coverage_weight",   type=float, default=0.05)
     parser.add_argument("--no_compile",        action="store_true")
+    parser.add_argument("--fix_illum",         action="store_true")
     return parser.parse_args()
 
 
@@ -183,21 +208,23 @@ if __name__ == "__main__":
     args       = parse_args()
     sim_config = misc.get_simulation_config()
 
-    optimiser  = SourceMaskOptimiser(
+    optimiser = SourceMaskOptimiser(
         f"checkpoints/{args.checkpoint}",
         compile_model=not args.no_compile
     )
 
     illum_augmenter = IlluminationAugmenter()
-    illum_quadrants = illum_augmenter.get_batch(args.batch_size, sim_config)
     target_resists  = masks_module.get_batch('example_masks', args.batch_size, **sim_config)
+    illum_quadrants = illum_augmenter.get_batch(args.batch_size, sim_config)
 
-    mask_results, history = optimiser.optimise_batch(
+    mask_results, illum_results, history = optimiser.optimise_batch(
         target_resists    = target_resists,
         illum_quadrants   = illum_quadrants,
         num_iterations    = args.base_iterations,
         binary_iterations = args.binary_iterations,
         snapshot_every    = args.snapshot_every,
+        coverage_weight   = args.coverage_weight,
+        optimise_illum    = not args.fix_illum,
     )
 
     print(f"Optimised {args.batch_size} masks")

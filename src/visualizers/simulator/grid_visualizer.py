@@ -3,8 +3,8 @@ from src.core.simulator.lithography_simulator import LithographySimulator
 import src.core.simulator.illuminator as illuminator
 import src.core.misc as misc
 import src.core.simulator.masks as masks_module
-from src.core.augmenters.mask_augmenter import MaskAugmenter
-from src.core.augmenters.illumination_augmenter import IlluminationAugmenter
+from src.core.data.mask_augmenter import MaskAugmenter
+from src.core.data.illumination_augmenter import IlluminationAugmenter
 
 class GridVisualizer:
     """Visualizes an NxN grid of simulation results from different masks and illumination fields."""

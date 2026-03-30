@@ -9,8 +9,8 @@ import src.visualizers.simulator.simulation_visualizer as simulation_visualizer
 import src.core.simulator.masks as masks
 import src.core.simulator.illuminator as illuminator
 import src.core.misc as misc
-from src.core.augmenters.mask_augmenter import MaskAugmenter
-from src.core.augmenters.illumination_augmenter import IlluminationAugmenter
+from src.core.data.mask_augmenter import MaskAugmenter
+from src.core.data.illumination_augmenter import IlluminationAugmenter
 
 
 def visualize_mask_augmentations(augmenter, mask):
