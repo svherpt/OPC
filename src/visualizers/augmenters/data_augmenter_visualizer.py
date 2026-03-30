@@ -1,13 +1,14 @@
 
 import numpy as np
+import argparse
 import matplotlib.pyplot as plt
-import json
 from pathlib import Path
 import random
 from PIL import Image
 import src.visualizers.simulator.simulation_visualizer as simulation_visualizer
 import src.core.simulator.masks as masks
 import src.core.simulator.illuminator as illuminator
+import src.core.misc as misc
 from src.core.augmenters.mask_augmenter import MaskAugmenter
 from src.core.augmenters.illumination_augmenter import IlluminationAugmenter
 
@@ -147,20 +148,49 @@ def visualize_dataset_samples(data_dir, sim_config, n_samples=100):
         simulation_visualizer.visualize_simulation_results(sim_results, mask=mask, illumination=illum_quadrant, config=sim_config)
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Visualize OPC dataset / augmentations")
+    parser.add_argument(
+        "--masks",
+        action="store_true",
+        help="Visualize mask augmentations"
+    )
+    parser.add_argument(
+        "--illuminations",
+        action="store_true",
+        help="Visualize illumination augmentations"
+    )
+    parser.add_argument(
+        "--results",
+        action="store_true",
+        help="Visualize simulation results from a dataset folder"
+    )
+    parser.add_argument(
+        "--data_dir",
+        type=str,
+        default="augmented_medium",
+        help="Dataset folder to visualize (for results)"
+    )
+
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
-    with open("sim_config.json", "r") as f:
-        sim_config = json.load(f)
+    args = parse_args()
 
-    # Visualize mask augmentations
-    while(True):
-        random_mask = masks.get_random_dataset_mask('example_masks', **sim_config)
-        mask_augmenter = MaskAugmenter()
-        visualize_random_mask_augmentations(mask_augmenter, random_mask)
+    sim_config = misc.get_simulation_config()
 
-    # Visualize illumination augmentations
-    # while(True):
-    #     illum_augmenter = IlluminationAugmenter()
-    #     visualize_random_illumination_augmentations(illum_augmenter, sim_config)
+    mask_augmenter = MaskAugmenter()
 
-    # while(True):
-    #     visualize_dataset_samples('augmented_medium', sim_config)
+    if args.masks:
+        while True:
+            random_mask = masks.get_random_dataset_mask('example_masks', **sim_config)
+            visualize_random_mask_augmentations(mask_augmenter, random_mask)
+
+    if args.illuminations:
+        illum_augmenter = IlluminationAugmenter()
+        while True:
+            visualize_random_illumination_augmentations(illum_augmenter, sim_config)
+
+    if args.results:
+        visualize_dataset_samples(args.data_dir, sim_config)
