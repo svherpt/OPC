@@ -71,14 +71,14 @@ def plot_predictions(model, dataset, device, n=6, save_dir=None, show=True):
         plt.close()
 
 if __name__ == "__main__":
-    CHECKPOINT = "checkpoints/exp014_baseline/epoch_0050.pt"
+    CHECKPOINT = "checkpoints/exp020/epoch_0100.pt"
     device     = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     model, checkpoint = load_model_from_checkpoint(CHECKPOINT)
     model = model.to(device)
 
     config  = checkpoint["config"]
-    dataset = LithographyDataset(config["data"]["data_dir"], split="train")
+    dataset = LithographyDataset("augmented_blurred_large", split="test")
 
     while True:
         plot_predictions(model, dataset, device, n=4, save_dir="outputs", show=True)

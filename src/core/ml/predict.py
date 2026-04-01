@@ -67,7 +67,7 @@ if __name__ == "__main__":
     from src.core.ml.dataset import LithographyDataset
     from torch.utils.data import DataLoader
 
-    CHECKPOINT = "checkpoints/exp008_baseline/epoch_0050.pt"
+    CHECKPOINT = "checkpoints/exp020/epoch_0100.pt"
     device     = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     model, checkpoint = load_model_from_checkpoint(CHECKPOINT)

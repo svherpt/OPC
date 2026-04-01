@@ -76,7 +76,7 @@ class IlluminationAugmenter:
 
         #Clip and normalise to sum=1 for consistent exposure     
         illum = np.clip(illum, 0, 1)
-        illum /= (illum.sum() + 1e-8)
+        #illum /= (illum.sum() + 1e-8)
         return illum
     
     def get_batch(self, batch_size, sim_config):

@@ -78,7 +78,7 @@ class SourceMaskOptimiser:
     def optimise_batch(self, target_resists, illum_quadrants,
                        num_iterations=500, lr_mask=0.05, lr_illum=0.05,
                        initial_blur_mask=4.0, final_blur_mask=0.01,
-                       tv_weight=0.01, coverage_weight=0.05,
+                       tv_weight=0, coverage_weight=0.05,
                        binarize_final=True, binary_iterations=200,
                        binary_weight_max=0.3, snapshot_every=50,
                        optimise_illum=True):
